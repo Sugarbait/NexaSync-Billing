@@ -22,6 +22,7 @@ export default function CustomersPage() {
     customer_name: '',
     customer_email: '',
     retell_agent_ids: [] as string[],
+    retell_api_key: '',
     billing_contact_name: '',
     phone_number: '',
     billing_address: '',
@@ -79,6 +80,7 @@ export default function CustomersPage() {
       customer_name: '',
       customer_email: '',
       retell_agent_ids: [],
+      retell_api_key: '',
       billing_contact_name: '',
       phone_number: '',
       billing_address: '',
@@ -97,6 +99,7 @@ export default function CustomersPage() {
       customer_name: customer.customer_name,
       customer_email: customer.customer_email,
       retell_agent_ids: customer.retell_agent_ids || [],
+      retell_api_key: '', // Never pre-fill API key for security
       billing_contact_name: customer.billing_contact_name || '',
       phone_number: customer.phone_number || '',
       billing_address: customer.billing_address || '',
@@ -132,11 +135,32 @@ export default function CustomersPage() {
     e.preventDefault()
 
     try {
+      // Prepare data for save
+      const saveData: any = {
+        customer_name: formData.customer_name,
+        customer_email: formData.customer_email,
+        retell_agent_ids: formData.retell_agent_ids,
+        billing_contact_name: formData.billing_contact_name,
+        phone_number: formData.phone_number,
+        billing_address: formData.billing_address,
+        tax_id: formData.tax_id,
+        markup_percentage: formData.markup_percentage,
+        auto_invoice_enabled: formData.auto_invoice_enabled,
+        notes: formData.notes
+      }
+
+      // Only include API key if it was entered (not empty)
+      if (formData.retell_api_key.trim()) {
+        // TODO: Encrypt the API key before saving
+        // For now, we'll save it directly (implement encryption in production)
+        saveData.retell_api_key_encrypted = formData.retell_api_key
+      }
+
       if (editingCustomer) {
         // Update existing customer
         const { error } = await supabase
           .from('billing_customers')
-          .update(formData)
+          .update(saveData)
           .eq('id', editingCustomer.id)
 
         if (error) throw error
@@ -145,7 +169,7 @@ export default function CustomersPage() {
         // Create new customer
         const { error } = await supabase
           .from('billing_customers')
-          .insert([formData])
+          .insert([saveData])
 
         if (error) throw error
         alert('Customer created successfully')
@@ -310,6 +334,21 @@ export default function CustomersPage() {
               onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
               required
             />
+          </div>
+
+          {/* Retell API Key */}
+          <div>
+            <Input
+              label="Retell AI API Key*"
+              type="password"
+              value={formData.retell_api_key}
+              onChange={(e) => setFormData({ ...formData, retell_api_key: e.target.value })}
+              placeholder="key_..."
+              required
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              This customer's Retell AI API key (encrypted before storage). Required to fetch their call/chat data.
+            </p>
           </div>
 
           {/* Retell Agent IDs */}

@@ -5,6 +5,7 @@ export interface BillingCustomer {
   customer_email: string
   stripe_customer_id: string | null
   retell_agent_ids: string[]
+  retell_api_key_encrypted: string | null
   markup_percentage: number
   auto_invoice_enabled: boolean
   billing_contact_name: string | null

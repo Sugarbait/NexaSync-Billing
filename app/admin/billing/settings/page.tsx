@@ -436,36 +436,27 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-300 font-semibold mb-2">
+                Per-Customer API Keys (Recommended)
+              </p>
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                Configure Retell AI API to automatically fetch call/chat data and costs for billing calculations.
+                Each customer now has their own Retell AI API key configured in the Customers page. This allows you to:
+              </p>
+              <ul className="text-sm text-blue-800 dark:text-blue-300 mt-2 ml-4 list-disc space-y-1">
+                <li>Manage separate Retell AI accounts for each customer</li>
+                <li>Fetch call/chat data using customer-specific credentials</li>
+                <li>Maintain data isolation between customers</li>
+              </ul>
+              <p className="text-sm text-blue-700 dark:text-blue-400 mt-3 font-medium">
+                → Go to <strong>Customers</strong> page to add Retell AI API keys and Agent IDs per customer
               </p>
             </div>
 
-            <Input
-              label="Retell API Key"
-              type="password"
-              value={retellApiKey}
-              onChange={(e) => setRetellApiKey(e.target.value)}
-              placeholder="Enter your Retell AI API key"
-              helperText="Your Retell API key will be encrypted and stored securely. Leave blank to keep existing key."
-            />
-
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.retell_api_enabled}
-                  onChange={(e) => setSettings({ ...settings, retell_api_enabled: e.target.checked })}
-                  className="mr-2 rounded"
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400">Enable Retell AI integration for automatic cost calculation</span>
-              </label>
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-lg">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                <strong>Note:</strong> The global Retell API Key field below is no longer used. All Retell AI integration is now managed per-customer for better security and data isolation.
+              </p>
             </div>
-
-            <Button onClick={saveSettings} loading={saving}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Retell Settings
-            </Button>
           </CardContent>
         </Card>
 
