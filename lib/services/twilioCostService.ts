@@ -175,17 +175,13 @@ class TwilioCostService {
     // Includes: A-Z, a-z, 0-9, and GSM special chars
     const gsm7BasicChars = /^[@£$¥èéùìòÇ\n\fØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !"#¤%&'()*+,\-.\/0-9:;<=>?¡A-ZÄÖÑÜ§¿a-zäöñüà\[\\\]\^\{\|\}\~]*$/
 
-    // GSM-7 extended characters (each counts as 2 bytes)
-    // For simplicity, if extended chars present, treat as needing special handling
-    const hasExtendedChars = /[\f\^{}\\\[\]|~€]/.test(content)
-
     // If content doesn't match GSM-7 basic pattern, it requires UCS-2
     if (!gsm7BasicChars.test(content)) {
       return true
     }
 
-    // If extended chars present, they reduce capacity but don't force UCS-2
-    // For toll-free US/Canada billing, extended chars are still GSM-7
+    // GSM-7 extended characters (each counts as 2 bytes) are still GSM-7
+    // For toll-free US/Canada billing, extended chars don't force UCS-2 encoding
     // (each extended char uses 2 bytes but stays in GSM-7 encoding)
 
     return false
