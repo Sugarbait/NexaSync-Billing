@@ -13,20 +13,26 @@ interface NewsItem {
 export function NewsTicker() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
   useEffect(() => {
     fetchNews()
     // Refresh every 15 minutes
-    const interval = setInterval(fetchNews, 15 * 60 * 1000)
+    const interval = setInterval(() => {
+      console.log('[NewsTicker] Refreshing news (15-minute interval)')
+      fetchNews()
+    }, 15 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
   async function fetchNews() {
     try {
+      console.log('[NewsTicker] Fetching latest AI news...')
       // Using NewsAPI - you'll need to add your API key to .env.local as NEXT_PUBLIC_NEWS_API_KEY
       const apiKey = process.env.NEXT_PUBLIC_NEWS_API_KEY
 
       if (!apiKey) {
+        console.log('[NewsTicker] No API key found, using fallback news')
         // Fallback to sample news if no API key
         setNews([
           {
@@ -49,6 +55,7 @@ export function NewsTicker() {
           }
         ])
         setLoading(false)
+        setLastUpdate(new Date())
         return
       }
 
@@ -66,11 +73,13 @@ export function NewsTicker() {
           publishedAt: article.publishedAt
         }))
         setNews(formattedNews)
+        console.log(`[NewsTicker] Loaded ${formattedNews.length} articles`)
       }
 
       setLoading(false)
+      setLastUpdate(new Date())
     } catch (error) {
-      console.error('Failed to fetch news:', error)
+      console.error('[NewsTicker] Failed to fetch news:', error)
       setLoading(false)
     }
   }
@@ -79,12 +88,17 @@ export function NewsTicker() {
     return null
   }
 
+  const formatUpdateTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white overflow-hidden relative rounded-lg">
       <div className="flex items-center gap-3 py-2 px-4">
         <div className="flex items-center gap-2 shrink-0">
           <Newspaper className="w-4 h-4" />
           <span className="text-sm font-semibold">AI NEWS</span>
+          <span className="text-xs text-white/60">({formatUpdateTime(lastUpdate)})</span>
           <div className="w-px h-4 bg-white/30"></div>
         </div>
 

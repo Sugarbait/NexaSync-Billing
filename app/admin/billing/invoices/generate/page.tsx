@@ -1,23 +1,25 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, ArrowRight, Calendar, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Calendar, AlertCircle, CheckCircle, Clock, Zap } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Select } from '@/components/ui/Input'
+import { Select, Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
 import { stripeInvoiceService } from '@/lib/services/stripeInvoiceService'
 import { billingCostService } from '@/lib/services/billingCostService'
-import type { BillingCustomer, InvoicePreview, InvoiceResult } from '@/lib/types/billing'
+import type { BillingCustomer, InvoicePreview, InvoiceResult, BillingSettings } from '@/lib/types/billing'
 import { formatCAD, formatDateRange, getPreviousMonthRange, getCurrentMonthRange } from '@/lib/utils/format'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 type Step = 'date-range' | 'preview' | 'options' | 'processing' | 'results'
+type PageMode = 'manual' | 'automation'
 
 export default function GenerateInvoicesPage() {
   const router = useRouter()
+  const [pageMode, setPageMode] = useState<PageMode>('manual')
   const [currentStep, setCurrentStep] = useState<Step>('date-range')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(getPreviousMonthRange())
   const [customers, setCustomers] = useState<BillingCustomer[]>([])
@@ -29,9 +31,12 @@ export default function GenerateInvoicesPage() {
   const [autoCreateStripe, setAutoCreateStripe] = useState(true)
   const [results, setResults] = useState<InvoiceResult[]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [settings, setSettings] = useState<BillingSettings | null>(null)
+  const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
     loadCustomers()
+    loadSettings()
   }, [])
 
   async function loadCustomers() {
@@ -41,6 +46,83 @@ export default function GenerateInvoicesPage() {
       .order('customer_name', { ascending: true })
 
     setCustomers(data || [])
+  }
+
+  async function loadSettings() {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return
+
+    const { data } = await supabase
+      .from('billing_settings')
+      .select('*')
+      .eq('user_id', userData.user.id)
+      .single()
+
+    setSettings(data)
+  }
+
+  async function toggleCustomerAutoInvoice(customerId: string, enabled: boolean) {
+    setSavingSettings(true)
+    try {
+      const customer = customers.find(c => c.id === customerId)
+      if (!customer) return
+
+      // If enabling, set defaults if not already set
+      const updates: any = { auto_invoice_enabled: enabled }
+      if (enabled && !customer.auto_invoice_day_of_month) {
+        updates.auto_invoice_day_of_month = 1
+        updates.auto_invoice_time = '09:00'
+        updates.auto_send_invoice = false
+      }
+
+      const { error } = await supabase
+        .from('billing_customers')
+        .update(updates)
+        .eq('id', customerId)
+
+      if (error) throw error
+
+      // Update local state
+      setCustomers(customers.map(c =>
+        c.id === customerId ? { ...c, ...updates } : c
+      ))
+    } catch (error) {
+      console.error('Failed to update auto-invoice setting:', error)
+      alert('Failed to update auto-invoice setting')
+    } finally {
+      setSavingSettings(false)
+    }
+  }
+
+  async function updateCustomerSchedule(customerId: string, dayOfMonth: number, time: string, autoSend: boolean) {
+    setSavingSettings(true)
+    try {
+      const { error } = await supabase
+        .from('billing_customers')
+        .update({
+          auto_invoice_day_of_month: dayOfMonth,
+          auto_invoice_time: time,
+          auto_send_invoice: autoSend
+        })
+        .eq('id', customerId)
+
+      if (error) throw error
+
+      // Update local state
+      setCustomers(customers.map(c =>
+        c.id === customerId ? {
+          ...c,
+          auto_invoice_day_of_month: dayOfMonth,
+          auto_invoice_time: time,
+          auto_send_invoice: autoSend
+        } : c
+      ))
+    } catch (error) {
+      console.error('Failed to update schedule:', error)
+      alert('Failed to update schedule')
+    } finally {
+      setSavingSettings(false)
+    }
   }
 
   async function calculatePreviews() {
@@ -294,8 +376,39 @@ export default function GenerateInvoicesPage() {
         <p className="text-gray-600 dark:text-gray-400 mt-2">Create and send invoices for your customers</p>
       </div>
 
-      {/* Step Indicator */}
-      <div className="mb-8">
+      {/* Tab Navigation */}
+      <div className="mb-8 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setPageMode('manual')}
+            className={`pb-3 px-4 font-medium text-sm border-b-2 transition-colors ${
+              pageMode === 'manual'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <Calendar className="w-4 h-4 inline mr-2" />
+            Manual Generation
+          </button>
+          <button
+            onClick={() => setPageMode('automation')}
+            className={`pb-3 px-4 font-medium text-sm border-b-2 transition-colors ${
+              pageMode === 'automation'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <Zap className="w-4 h-4 inline mr-2" />
+            Auto-Invoice Schedule
+          </button>
+        </div>
+      </div>
+
+      {/* Manual Generation Mode */}
+      {pageMode === 'manual' && (
+        <>
+          {/* Step Indicator */}
+          <div className="mb-8">
         <div className="flex items-center justify-center space-x-4">
           {['Date Range', 'Preview', 'Options', 'Processing', 'Results'].map((label, index) => {
             const stepValues: Step[] = ['date-range', 'preview', 'options', 'processing', 'results']
@@ -677,6 +790,210 @@ export default function GenerateInvoicesPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+        </>
+      )}
+
+      {/* Automation Mode */}
+      {pageMode === 'automation' && (
+        <div className="space-y-6">
+          {/* Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Clock className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
+                Per-Customer Invoice Scheduling
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  Configure automatic invoice generation for each customer individually. Each customer can have their own schedule.
+                  Invoices will be created for the previous month's usage on the specified day and time.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Customer Auto-Invoice Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Auto-Invoice Settings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {customers.map((customer) => (
+                  <div
+                    key={customer.id}
+                    className={`p-4 border rounded-lg ${
+                      customer.auto_invoice_enabled
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                            {customer.customer_name}
+                          </h3>
+                          {customer.stripe_customer_id ? (
+                            <Badge color="green">Stripe Connected</Badge>
+                          ) : (
+                            <Badge color="yellow">No Stripe ID</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {customer.customer_email} • {customer.markup_percentage}% markup
+                        </p>
+                      </div>
+
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={customer.auto_invoice_enabled}
+                          onChange={(e) => toggleCustomerAutoInvoice(customer.id, e.target.checked)}
+                          disabled={savingSettings || !customer.stripe_customer_id}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                          customer.auto_invoice_enabled
+                            ? 'bg-blue-600'
+                            : 'bg-gray-200 dark:bg-gray-700'
+                        } ${!customer.stripe_customer_id ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+                        <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {customer.auto_invoice_enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {customer.auto_invoice_enabled && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Day of Month
+                            </label>
+                            <Select
+                              value={customer.auto_invoice_day_of_month || 1}
+                              onChange={(e) => {
+                                const newDay = parseInt(e.target.value)
+                                updateCustomerSchedule(
+                                  customer.id,
+                                  newDay,
+                                  customer.auto_invoice_time || '09:00',
+                                  customer.auto_send_invoice || false
+                                )
+                              }}
+                              disabled={savingSettings}
+                              options={Array.from({ length: 28 }, (_, i) => ({
+                                value: i + 1,
+                                label: `${i + 1}${i === 0 ? 'st' : i === 1 ? 'nd' : i === 2 ? 'rd' : 'th'}`
+                              }))}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Time (24h)
+                            </label>
+                            <Input
+                              type="time"
+                              value={customer.auto_invoice_time || '09:00'}
+                              onChange={(e) => {
+                                updateCustomerSchedule(
+                                  customer.id,
+                                  customer.auto_invoice_day_of_month || 1,
+                                  e.target.value,
+                                  customer.auto_send_invoice || false
+                                )
+                              }}
+                              disabled={savingSettings}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Auto-Send
+                            </label>
+                            <div className="flex items-center h-10">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={customer.auto_send_invoice || false}
+                                  onChange={(e) => {
+                                    updateCustomerSchedule(
+                                      customer.id,
+                                      customer.auto_invoice_day_of_month || 1,
+                                      customer.auto_invoice_time || '09:00',
+                                      e.target.checked
+                                    )
+                                  }}
+                                  disabled={savingSettings}
+                                  className="mr-2 rounded"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                  {customer.auto_send_invoice ? 'Send automatically' : 'Create as draft'}
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 bg-green-50 dark:bg-green-900/30 p-3 rounded">
+                          <p className="text-sm text-green-800 dark:text-green-200">
+                            <Clock className="w-4 h-4 inline mr-1" />
+                            Invoices will be generated on day {customer.auto_invoice_day_of_month || 1} at{' '}
+                            {customer.auto_invoice_time || '09:00'} and{' '}
+                            {customer.auto_send_invoice ? 'sent automatically' : 'created as draft'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!customer.stripe_customer_id && (
+                      <div className="mt-3 bg-red-50 dark:bg-red-900/30 p-3 rounded">
+                        <p className="text-sm text-red-800 dark:text-red-200">
+                          <AlertCircle className="w-4 h-4 inline mr-1" />
+                          Stripe customer ID required to enable auto-invoicing
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {customers.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No customers found. Add customers to enable auto-invoicing.
+                  </div>
+                )}
+              </div>
+
+              {customers.length > 0 && (
+                <div className="mt-6 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Customers</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{customers.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Auto-Invoice Enabled</p>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                      {customers.filter(c => c.auto_invoice_enabled).length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Ready for Auto-Invoice</p>
+                    <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      {customers.filter(c => c.auto_invoice_enabled && c.stripe_customer_id).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )

@@ -13,6 +13,9 @@ export interface BillingCustomer {
   twilio_phone_numbers: string[]
   markup_percentage: number
   auto_invoice_enabled: boolean
+  auto_invoice_day_of_month: number | null
+  auto_invoice_time: string | null
+  auto_send_invoice: boolean
   billing_contact_name: string | null
   billing_address: string | null
   phone_number: string | null

@@ -456,7 +456,7 @@ export default function BillingDashboard() {
           <Button variant="secondary" size="lg">Manage Customers</Button>
         </Link>
         <Link href="/admin/billing/settings">
-          <Button variant="ghost" size="lg">Settings</Button>
+          <Button variant="secondary" size="lg">Settings</Button>
         </Link>
       </div>
 

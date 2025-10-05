@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { DollarSign, Shield, Key } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -165,10 +166,17 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-blue-600 dark:bg-blue-500 rounded-xl mb-4">
-            <DollarSign className="w-12 h-12 text-white" />
+          <div className="flex justify-center mb-4">
+            <Image
+              src="https://nexasync.ca/images/NexaSync-White.png"
+              alt="NexaSync Logo"
+              width={220}
+              height={60}
+              className="h-16 w-auto"
+              priority
+            />
           </div>
-          <h1 className="text-3xl gradient-text mb-2">NexaSync Billing</h1>
+          <h1 className="text-2xl gradient-text mb-2">Billing Admin</h1>
           <p className="text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
             <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
             MFA Protected • Super User Access
@@ -177,7 +185,7 @@ export default function LoginPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{showMFA ? 'Enter MFA Code' : 'Sign In'}</CardTitle>
+            <CardTitle className="text-center">{showMFA ? 'Enter MFA Code' : 'Sign In'}</CardTitle>
           </CardHeader>
           <CardContent>
             {!showMFA ? (
