@@ -14,6 +14,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<BillingUser[]>([])
   const [showModal, setShowModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<BillingUser | null>(null)
   const [editingUser, setEditingUser] = useState<BillingUser | null>(null)
   const [formData, setFormData] = useState({
     email: '',
@@ -36,41 +38,10 @@ export default function UsersPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-
-      if (data && data.length > 0) {
-        setUsers(data)
-      } else {
-        // Use mock data if no Supabase connection
-        setUsers([
-          {
-            id: 'demo-user-1',
-            auth_user_id: 'auth-demo-1',
-            email: 'admin@nexasync.com',
-            full_name: 'Demo Admin',
-            role: 'super_admin',
-            mfa_enabled: true,
-            is_active: true,
-            created_at: new Date().toISOString(),
-            last_login_at: new Date().toISOString()
-          }
-        ] as any)
-      }
+      setUsers(data || [])
     } catch (error) {
       console.error('Failed to load users:', error)
-      // Fallback to mock data on error
-      setUsers([
-        {
-          id: 'demo-user-1',
-          auth_user_id: 'auth-demo-1',
-          email: 'admin@nexasync.com',
-          full_name: 'Demo Admin',
-          role: 'super_admin',
-          mfa_enabled: true,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          last_login_at: new Date().toISOString()
-        }
-      ] as any)
+      setUsers([])
     } finally {
       setLoading(false)
     }
@@ -170,6 +141,34 @@ export default function UsersPage() {
     }
   }
 
+  async function handleToggleMFA(user: BillingUser) {
+    const action = user.mfa_enabled ? 'disable' : 'enable'
+    if (!confirm(`Are you sure you want to ${action} MFA for ${user.full_name}?`)) return
+
+    try {
+      const { error } = await supabase
+        .from('billing_users')
+        .update({
+          mfa_enabled: !user.mfa_enabled,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+      alert(`MFA ${action}d successfully`)
+
+      // Update selectedUser if detail modal is open
+      if (selectedUser?.id === user.id) {
+        setSelectedUser({ ...user, mfa_enabled: !user.mfa_enabled })
+      }
+
+      loadUsers()
+    } catch (error) {
+      console.error('Failed to toggle MFA:', error)
+      alert(`Failed to ${action} MFA`)
+    }
+  }
+
   function openAddModal() {
     setEditingUser(null)
     setFormData({
@@ -192,6 +191,11 @@ export default function UsersPage() {
       mfa_enabled: user.mfa_enabled
     })
     setShowModal(true)
+  }
+
+  function viewDetails(user: BillingUser) {
+    setSelectedUser(user)
+    setShowDetailModal(true)
   }
 
   function closeModal() {
@@ -243,7 +247,11 @@ export default function UsersPage() {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <tr
+                    key={user.id}
+                    className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                    onClick={() => viewDetails(user)}
+                  >
                     <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{user.full_name}</td>
                     <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{user.email}</td>
                     <td className="py-3 px-4">
@@ -276,24 +284,33 @@ export default function UsersPage() {
                     <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
                       {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => openEditModal(user)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(user)
+                          }}
                           className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                           title="Edit user"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleToggleActive(user)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleToggleActive(user)
+                          }}
                           className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded"
                           title={user.is_active ? 'Deactivate' : 'Activate'}
                         >
                           <Shield className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(user)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(user)
+                          }}
                           className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded"
                           title="Delete user"
                         >
@@ -308,6 +325,137 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* User Detail Modal */}
+      {selectedUser && (
+        <Modal
+          isOpen={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          title="User Details"
+          size="lg"
+        >
+          <div className="space-y-6">
+            {/* User Information */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">User Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Full Name</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedUser.full_name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedUser.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Role</p>
+                  <div className="mt-1">
+                    {selectedUser.role === 'super_admin' ? (
+                      <Badge color="blue">
+                        <Shield className="w-3 h-3 mr-1" />
+                        Super Admin
+                      </Badge>
+                    ) : (
+                      <Badge color="gray">Admin</Badge>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
+                  <div className="mt-1">
+                    {selectedUser.is_active ? (
+                      <Badge color="green">Active</Badge>
+                    ) : (
+                      <Badge color="red">Inactive</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Settings */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Security</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Multi-Factor Authentication</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {selectedUser.mfa_enabled
+                        ? 'MFA is currently enabled for this user'
+                        : 'MFA is currently disabled for this user'}
+                    </p>
+                  </div>
+                  <Button
+                    variant={selectedUser.mfa_enabled ? 'secondary' : 'primary'}
+                    onClick={() => handleToggleMFA(selectedUser)}
+                  >
+                    <Key className="w-4 h-4 mr-2" />
+                    {selectedUser.mfa_enabled ? 'Disable MFA' : 'Enable MFA'}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">MFA Status</p>
+                    <div className="mt-1">
+                      {selectedUser.mfa_enabled ? (
+                        <Badge color="green">
+                          <Key className="w-3 h-3 mr-1" />
+                          Enabled
+                        </Badge>
+                      ) : (
+                        <Badge color="yellow">Disabled</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Last Login</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">
+                      {selectedUser.last_login_at ? new Date(selectedUser.last_login_at).toLocaleString() : 'Never'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Account Details */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Account Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Created</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {new Date(selectedUser.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">User ID</p>
+                  <p className="font-mono text-xs text-gray-900 dark:text-gray-100">{selectedUser.id}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailModal(false)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowDetailModal(false)
+                  openEditModal(selectedUser)
+                }}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit User
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Add/Edit User Modal */}
       <Modal

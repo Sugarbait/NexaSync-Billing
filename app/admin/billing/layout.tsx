@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { DollarSign, Users, FileText, Settings, Shield, LayoutDashboard, UserCircle, LogOut, ChevronDown } from 'lucide-react'
+import { Users, FileText, Settings, Shield, LayoutDashboard, UserCircle, LogOut, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { BillingUser } from '@/lib/types/auth'
+import { NewsTicker } from '@/components/ui/NewsTicker'
 
 export default function BillingLayout({
   children,
@@ -92,20 +94,26 @@ export default function BillingLayout({
       {/* Header */}
       <header className="bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
         <div className="px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-600 dark:bg-blue-500 rounded-lg">
-                <DollarSign className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">NexaSync Billing</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <Shield className="w-3 h-3 text-green-600 dark:text-green-400" />
-                  <p className="text-xs text-gray-600 dark:text-gray-400">MFA Protected • Super User Only</p>
-                </div>
-              </div>
+          <div className="flex items-center justify-between gap-8">
+            <div className="flex items-center space-x-3 shrink-0">
+              <Link href="/admin/billing">
+                <Image
+                  src="https://nexasync.ca/images/NexaSync-White.png"
+                  alt="NexaSync Logo"
+                  width={220}
+                  height={60}
+                  className="h-12 w-auto"
+                  priority
+                />
+              </Link>
             </div>
-            <div className="flex items-center space-x-4">
+
+            {/* AI News Ticker - Integrated in Header */}
+            <div className="flex-1 min-w-0">
+              <NewsTicker />
+            </div>
+
+            <div className="flex items-center space-x-4 shrink-0">
               {/* Profile Menu */}
               <div className="relative">
                 <button

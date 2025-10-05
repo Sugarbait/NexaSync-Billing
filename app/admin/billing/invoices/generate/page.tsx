@@ -291,7 +291,7 @@ export default function GenerateInvoicesPage() {
           </Button>
         </Link>
         <h1 className="text-3xl font-black gradient-text mt-4">Generate Invoices</h1>
-        <p className="text-gray-600 mt-2">Create and send invoices for your customers</p>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">Create and send invoices for your customers</p>
       </div>
 
       {/* Step Indicator */}
@@ -308,16 +308,16 @@ export default function GenerateInvoicesPage() {
                 <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
                   isActive ? 'bg-blue-600 text-white' :
                   isCompleted ? 'bg-green-600 text-white' :
-                  'bg-gray-200 text-gray-600'
+                  'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                 }`}>
                   {isCompleted ? <CheckCircle className="w-5 h-5" /> : index + 1}
                 </div>
                 <span className={`ml-2 text-sm font-medium ${
-                  isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-600'
+                  isActive ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'
                 }`}>
                   {label}
                 </span>
-                {index < 4 && <ArrowRight className="w-4 h-4 mx-4 text-gray-400" />}
+                {index < 4 && <ArrowRight className="w-4 h-4 mx-4 text-gray-400 dark:text-gray-500" />}
               </div>
             )
           })}
@@ -348,30 +348,30 @@ export default function GenerateInvoicesPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg"
                   value={dateRange.start.toISOString().split('T')[0]}
                   onChange={(e) => setDateRange({ ...dateRange, start: new Date(e.target.value) })}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
                 <input
                   type="date"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg"
                   value={dateRange.end.toISOString().split('T')[0]}
                   onChange={(e) => setDateRange({ ...dateRange, end: new Date(e.target.value) })}
                 />
               </div>
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-800">
+            <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
                 <strong>Selected Period:</strong> {formatDateRange(dateRange)}
               </p>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                 This will calculate costs for all completed chats and calls in this period.
               </p>
             </div>
@@ -403,8 +403,8 @@ export default function GenerateInvoicesPage() {
             <div className="overflow-x-auto mb-6">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">
                       <input
                         type="checkbox"
                         checked={selectedCustomers.size === previews.length}
@@ -412,19 +412,19 @@ export default function GenerateInvoicesPage() {
                         className="rounded"
                       />
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Customer</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Usage</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Costs</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Subtotal</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Markup</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Total</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Customer</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Usage</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Costs</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Subtotal</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Markup</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Total</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previews.map((preview) => (
-                    <tr key={preview.customerId} className={`border-b border-gray-100 ${
-                      selectedCustomers.has(preview.customerId) ? 'bg-blue-50' : ''
+                    <tr key={preview.customerId} className={`border-b border-gray-100 dark:border-gray-700 ${
+                      selectedCustomers.has(preview.customerId) ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                     }`}>
                       <td className="py-3 px-4">
                         <input
@@ -434,19 +434,19 @@ export default function GenerateInvoicesPage() {
                           className="rounded"
                         />
                       </td>
-                      <td className="py-3 px-4 text-sm font-medium">{preview.customerName}</td>
-                      <td className="py-3 px-4 text-xs">
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-gray-100">{preview.customerName}</td>
+                      <td className="py-3 px-4 text-xs text-gray-900 dark:text-gray-100">
                         <div>{preview.totalChats} chats, {preview.totalCalls} calls</div>
-                        <div className="text-gray-500">{preview.totalSegments} seg, {preview.totalMinutes.toFixed(1)} min</div>
+                        <div className="text-gray-500 dark:text-gray-400">{preview.totalSegments} seg, {preview.totalMinutes.toFixed(1)} min</div>
                       </td>
-                      <td className="py-3 px-4 text-xs">
+                      <td className="py-3 px-4 text-xs text-gray-900 dark:text-gray-100">
                         <div>SMS: {formatCAD(preview.twilioSMSCost)}</div>
                         <div>Voice: {formatCAD(preview.twilioVoiceCost)}</div>
                         <div>AI: {formatCAD(preview.retellAICost)}</div>
                       </td>
-                      <td className="py-3 px-4 text-sm">{formatCAD(preview.subtotal)}</td>
-                      <td className="py-3 px-4 text-sm">{preview.markupPercent}%</td>
-                      <td className="py-3 px-4 text-sm font-semibold">{formatCAD(preview.total)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{formatCAD(preview.subtotal)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{preview.markupPercent}%</td>
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCAD(preview.total)}</td>
                       <td className="py-3 px-4 text-sm">
                         {preview.hasStripeCustomer ? (
                           <Badge color="green">Ready</Badge>
@@ -460,19 +460,19 @@ export default function GenerateInvoicesPage() {
               </table>
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-lg mb-6">
+            <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-6">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600">Selected Customers</p>
-                  <p className="text-xl font-bold">{selectedPreviews.length}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Selected Customers</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{selectedPreviews.length}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Total Amount</p>
-                  <p className="text-xl font-bold">{formatCAD(totalAmount)}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{formatCAD(totalAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Missing Stripe IDs</p>
-                  <p className="text-xl font-bold">{missingStripe}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Missing Stripe IDs</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{missingStripe}</p>
                 </div>
               </div>
             </div>
@@ -503,7 +503,7 @@ export default function GenerateInvoicesPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Invoice Mode</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Invoice Mode</label>
               <div className="space-y-2">
                 {[
                   { value: 'draft', label: 'Create Draft Invoices', description: 'Invoices will be created but not sent. You can review before sending.' },
@@ -513,7 +513,7 @@ export default function GenerateInvoicesPage() {
                   <div
                     key={option.value}
                     className={`p-4 border rounded-lg cursor-pointer ${
-                      invoiceMode === option.value ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+                      invoiceMode === option.value ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     onClick={() => setInvoiceMode(option.value as any)}
                   >
@@ -525,8 +525,8 @@ export default function GenerateInvoicesPage() {
                         className="mr-3"
                       />
                       <div>
-                        <p className="font-medium">{option.label}</p>
-                        <p className="text-sm text-gray-600">{option.description}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{option.label}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{option.description}</p>
                       </div>
                     </div>
                   </div>
@@ -547,11 +547,11 @@ export default function GenerateInvoicesPage() {
             />
 
             {missingStripe > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg">
                 <div className="flex items-start">
                   <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
                   <div className="flex-1">
-                    <p className="font-medium text-yellow-800">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-200">
                       {missingStripe} customer(s) don't have Stripe Customer IDs
                     </p>
                     <div className="mt-2">
@@ -562,7 +562,7 @@ export default function GenerateInvoicesPage() {
                           onChange={(e) => setAutoCreateStripe(e.target.checked)}
                           className="mr-2 rounded"
                         />
-                        <span className="text-sm text-yellow-700">
+                        <span className="text-sm text-yellow-700 dark:text-yellow-300">
                           Automatically create Stripe customers for them
                         </span>
                       </label>
@@ -593,17 +593,17 @@ export default function GenerateInvoicesPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
               </div>
-              <p className="text-lg font-medium">Processing {progress.current} of {progress.total} invoices...</p>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-4">
+              <p className="text-lg font-medium text-gray-900 dark:text-gray-100">Processing {progress.current} of {progress.total} invoices...</p>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-4">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${(progress.current / progress.total) * 100}%` }}
                 />
               </div>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                 {Math.round((progress.current / progress.total) * 100)}% complete
               </p>
             </div>
@@ -619,21 +619,21 @@ export default function GenerateInvoicesPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-3 gap-4">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600">Successfully Created</p>
-                <p className="text-2xl font-bold text-green-600">
+              <div className="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Successfully Created</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {results.filter(r => r.success).length}
                 </p>
               </div>
-              <div className="bg-red-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600">Failed</p>
-                <p className="text-2xl font-bold text-red-600">
+              <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Failed</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {results.filter(r => !r.success).length}
                 </p>
               </div>
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600">Total Amount</p>
-                <p className="text-2xl font-bold text-blue-600">
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {formatCAD(results.filter(r => r.success).reduce((sum, r) => sum + (r.amount || 0), 0))}
                 </p>
               </div>
@@ -644,7 +644,7 @@ export default function GenerateInvoicesPage() {
                 <div
                   key={result.customerId}
                   className={`p-3 rounded-lg flex items-center justify-between ${
-                    result.success ? 'bg-green-50' : 'bg-red-50'
+                    result.success ? 'bg-green-50 dark:bg-green-900/30' : 'bg-red-50 dark:bg-red-900/30'
                   }`}
                 >
                   <div className="flex items-center">
@@ -654,14 +654,14 @@ export default function GenerateInvoicesPage() {
                       <AlertCircle className="w-5 h-5 text-red-600 mr-3" />
                     )}
                     <div>
-                      <p className="font-medium">{result.customerName}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{result.customerName}</p>
                       {!result.success && result.error && (
-                        <p className="text-sm text-red-600">{result.error}</p>
+                        <p className="text-sm text-red-600 dark:text-red-400">{result.error}</p>
                       )}
                     </div>
                   </div>
                   {result.success && result.amount && (
-                    <p className="font-semibold">{formatCAD(result.amount)}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCAD(result.amount)}</p>
                   )}
                 </div>
               ))}

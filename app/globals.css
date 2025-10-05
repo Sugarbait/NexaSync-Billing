@@ -3,12 +3,20 @@
 :root {
   --background: #f5f5f5;
   --foreground: #171717;
+  --card-bg: #ffffff;
+  --border-color: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
   color-scheme: light;
 }
 
 .dark {
   --background: #0f172a;
   --foreground: #f1f5f9;
+  --card-bg: #1e293b;
+  --border-color: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
   color-scheme: dark;
 }
 
@@ -48,4 +56,38 @@ html.no-transition * {
   letter-spacing: -0.02em;
   text-shadow: 0 0 1px rgba(102, 126, 234, 0.5);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Recharts styling for dark mode */
+.recharts-wrapper .recharts-cartesian-axis-tick-value {
+  fill: var(--text-primary);
+}
+
+.recharts-wrapper .recharts-legend-item-text {
+  color: var(--text-secondary) !important;
+}
+
+/* Remove white/gray background on bar hover */
+.recharts-bar-rectangle:hover {
+  opacity: 0.8;
+  filter: brightness(1.1);
+}
+
+.dark .recharts-bar-rectangle:hover {
+  opacity: 0.9;
+  filter: brightness(1.2);
+}
+
+/* Force transparent background on recharts active shape */
+.recharts-active-shape {
+  fill: transparent !important;
+}
+
+.recharts-rectangle.recharts-tooltip-cursor {
+  fill: transparent !important;
+}
+
+/* Remove default cursor background in dark mode */
+.dark .recharts-rectangle.recharts-tooltip-cursor {
+  fill: rgba(255, 255, 255, 0.05) !important;
 }

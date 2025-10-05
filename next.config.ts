@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
     // Allow production builds to successfully complete even with type errors
     ignoreBuildErrors: false,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'nexasync.ca',
+        pathname: '/images/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;

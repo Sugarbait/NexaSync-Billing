@@ -101,7 +101,7 @@ export function Select({
         {...props}
       >
         {options.map(option => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
             {option.label}
           </option>
         ))}

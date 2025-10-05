@@ -17,12 +17,19 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState<BillingCustomer | null>(null)
   const [editingCustomer, setEditingCustomer] = useState<BillingCustomer | null>(null)
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_email: '',
     retell_agent_ids: [] as string[],
+    voice_agent_id: '',
+    sms_agent_id: '',
     retell_api_key: '',
+    twilio_account_sid: '',
+    twilio_auth_token: '',
+    twilio_phone_numbers: [] as string[],
     billing_contact_name: '',
     phone_number: '',
     billing_address: '',
@@ -31,7 +38,7 @@ export default function CustomersPage() {
     auto_invoice_enabled: false,
     notes: ''
   })
-  const [agentIdInput, setAgentIdInput] = useState('')
+  const [phoneNumberInput, setPhoneNumberInput] = useState('')
 
   useEffect(() => {
     loadCustomers()
@@ -68,7 +75,7 @@ export default function CustomersPage() {
       setCustomers(data || [])
     } catch (error) {
       console.error('Failed to load customers:', error)
-      alert('Failed to load customers')
+      setCustomers([])
     } finally {
       setLoading(false)
     }
@@ -80,7 +87,12 @@ export default function CustomersPage() {
       customer_name: '',
       customer_email: '',
       retell_agent_ids: [],
+      voice_agent_id: '',
+      sms_agent_id: '',
       retell_api_key: '',
+      twilio_account_sid: '',
+      twilio_auth_token: '',
+      twilio_phone_numbers: [],
       billing_contact_name: '',
       phone_number: '',
       billing_address: '',
@@ -89,8 +101,13 @@ export default function CustomersPage() {
       auto_invoice_enabled: false,
       notes: ''
     })
-    setAgentIdInput('')
+    setPhoneNumberInput('')
     setShowModal(true)
+  }
+
+  function viewDetails(customer: BillingCustomer) {
+    setSelectedCustomer(customer)
+    setShowDetailModal(true)
   }
 
   function openEditModal(customer: BillingCustomer) {
@@ -99,7 +116,12 @@ export default function CustomersPage() {
       customer_name: customer.customer_name,
       customer_email: customer.customer_email,
       retell_agent_ids: customer.retell_agent_ids || [],
+      voice_agent_id: customer.voice_agent_id || '',
+      sms_agent_id: customer.sms_agent_id || '',
       retell_api_key: '', // Never pre-fill API key for security
+      twilio_account_sid: '', // Never pre-fill for security
+      twilio_auth_token: '', // Never pre-fill for security
+      twilio_phone_numbers: customer.twilio_phone_numbers || [],
       billing_contact_name: customer.billing_contact_name || '',
       phone_number: customer.phone_number || '',
       billing_address: customer.billing_address || '',
@@ -108,26 +130,26 @@ export default function CustomersPage() {
       auto_invoice_enabled: customer.auto_invoice_enabled,
       notes: customer.notes || ''
     })
-    setAgentIdInput('')
+    setPhoneNumberInput('')
     setShowModal(true)
   }
 
-  function addAgentId() {
-    if (!agentIdInput.trim()) return
+  function addPhoneNumber() {
+    if (!phoneNumberInput.trim()) return
 
-    if (!formData.retell_agent_ids.includes(agentIdInput.trim())) {
+    if (!formData.twilio_phone_numbers.includes(phoneNumberInput.trim())) {
       setFormData({
         ...formData,
-        retell_agent_ids: [...formData.retell_agent_ids, agentIdInput.trim()]
+        twilio_phone_numbers: [...formData.twilio_phone_numbers, phoneNumberInput.trim()]
       })
     }
-    setAgentIdInput('')
+    setPhoneNumberInput('')
   }
 
-  function removeAgentId(agentId: string) {
+  function removePhoneNumber(phoneNumber: string) {
     setFormData({
       ...formData,
-      retell_agent_ids: formData.retell_agent_ids.filter(id => id !== agentId)
+      twilio_phone_numbers: formData.twilio_phone_numbers.filter(num => num !== phoneNumber)
     })
   }
 
@@ -140,6 +162,9 @@ export default function CustomersPage() {
         customer_name: formData.customer_name,
         customer_email: formData.customer_email,
         retell_agent_ids: formData.retell_agent_ids,
+        voice_agent_id: formData.voice_agent_id,
+        sms_agent_id: formData.sms_agent_id,
+        twilio_phone_numbers: formData.twilio_phone_numbers,
         billing_contact_name: formData.billing_contact_name,
         phone_number: formData.phone_number,
         billing_address: formData.billing_address,
@@ -154,6 +179,16 @@ export default function CustomersPage() {
         // TODO: Encrypt the API key before saving
         // For now, we'll save it directly (implement encryption in production)
         saveData.retell_api_key_encrypted = formData.retell_api_key
+      }
+
+      // Only include Twilio credentials if entered
+      if (formData.twilio_account_sid.trim()) {
+        // TODO: Encrypt before saving
+        saveData.twilio_account_sid_encrypted = formData.twilio_account_sid
+      }
+      if (formData.twilio_auth_token.trim()) {
+        // TODO: Encrypt before saving
+        saveData.twilio_auth_token_encrypted = formData.twilio_auth_token
       }
 
       if (editingCustomer) {
@@ -207,8 +242,8 @@ export default function CustomersPage() {
     return (
       <div className="p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
+          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     )
@@ -268,7 +303,11 @@ export default function CustomersPage() {
                   </tr>
                 ) : (
                   filteredCustomers.map((customer) => (
-                    <tr key={customer.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr
+                      key={customer.id}
+                      className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      onClick={() => viewDetails(customer)}
+                    >
                       <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-gray-100">{customer.customer_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{customer.customer_email}</td>
                       <td className="py-3 px-4 text-sm">
@@ -287,16 +326,22 @@ export default function CustomersPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{formatDate(customer.created_at)}</td>
-                      <td className="py-3 px-4 text-sm">
+                      <td className="py-3 px-4 text-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => openEditModal(customer)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(customer)
+                            }}
                             className="text-blue-600 hover:text-blue-700"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(customer)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(customer)
+                            }}
                             className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -311,6 +356,192 @@ export default function CustomersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Customer Detail Modal */}
+      {selectedCustomer && (
+        <Modal
+          isOpen={showDetailModal}
+          onClose={() => setShowDetailModal(false)}
+          title="Customer Details"
+          size="xl"
+        >
+          <div className="space-y-6">
+            {/* Customer Information */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Customer Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Customer Name</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.customer_name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.customer_email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Contact Name</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.billing_contact_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Phone Number</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.phone_number || 'N/A'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Billing Address</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.billing_address || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Tax ID</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedCustomer.tax_id || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Billing Settings */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Billing Settings</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Markup Percentage</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{selectedCustomer.markup_percentage || 0}%</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Auto-Invoice</p>
+                  <div className="mt-1">
+                    {selectedCustomer.auto_invoice_enabled ? (
+                      <Badge color="blue">Enabled</Badge>
+                    ) : (
+                      <Badge color="gray">Disabled</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Stripe Status</p>
+                  <div className="mt-1">
+                    {selectedCustomer.stripe_customer_id ? (
+                      <Badge color="green">Connected</Badge>
+                    ) : (
+                      <Badge color="gray">Not Connected</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {selectedCustomer.stripe_customer_id && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Stripe Customer ID</p>
+                  <p className="font-mono text-xs text-gray-900 dark:text-gray-100">{selectedCustomer.stripe_customer_id}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Retell AI Configuration */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Retell AI Configuration</h3>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Voice Agent ID</p>
+                    {selectedCustomer.voice_agent_id ? (
+                      <Badge color="blue">{selectedCustomer.voice_agent_id}</Badge>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Not configured</p>
+                    )}
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">SMS Agent ID</p>
+                    {selectedCustomer.sms_agent_id ? (
+                      <Badge color="green">{selectedCustomer.sms_agent_id}</Badge>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Not configured</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">API Key</p>
+                  <p className="text-sm text-gray-900 dark:text-gray-100">
+                    {selectedCustomer.retell_api_key_encrypted ? '••••••••••••' : 'Not configured'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Twilio API Configuration */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Twilio API Configuration</h3>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Account SID</p>
+                    <p className="text-sm text-gray-900 dark:text-gray-100">
+                      {selectedCustomer.twilio_account_sid_encrypted ? '••••••••••••' : 'Not configured'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Auth Token</p>
+                    <p className="text-sm text-gray-900 dark:text-gray-100">
+                      {selectedCustomer.twilio_auth_token_encrypted ? '••••••••••••' : 'Not configured'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Phone Numbers to Track ({selectedCustomer.twilio_phone_numbers?.length || 0})</p>
+                  {selectedCustomer.twilio_phone_numbers && selectedCustomer.twilio_phone_numbers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCustomer.twilio_phone_numbers.map((phoneNum) => (
+                        <Badge key={phoneNum} color="green">{phoneNum}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No phone numbers configured</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {selectedCustomer.notes && (
+              <div>
+                <h3 className="text-lg font-black gradient-text mb-3">Notes</h3>
+                <p className="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">{selectedCustomer.notes}</p>
+              </div>
+            )}
+
+            {/* Account Details */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Account Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Created</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(selectedCustomer.created_at)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Last Updated</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(selectedCustomer.updated_at)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="secondary"
+                onClick={() => setShowDetailModal(false)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowDetailModal(false)
+                  openEditModal(selectedCustomer)
+                }}
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Customer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -336,65 +567,113 @@ export default function CustomersPage() {
             />
           </div>
 
-          {/* Retell API Key */}
+          {/* Retell API Configuration */}
           <div>
-            <Input
-              label="Retell AI API Key*"
-              type="password"
-              value={formData.retell_api_key}
-              onChange={(e) => setFormData({ ...formData, retell_api_key: e.target.value })}
-              placeholder="key_..."
-              required
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              This customer's Retell AI API key (encrypted before storage). Required to fetch their call/chat data.
-            </p>
+            <h3 className="text-lg font-black gradient-text mb-3">Retell AI Configuration</h3>
+            <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <Input
+                label="Retell AI API Key*"
+                type="password"
+                value={formData.retell_api_key}
+                onChange={(e) => setFormData({ ...formData, retell_api_key: e.target.value })}
+                placeholder="key_..."
+                required
+                helperText="This customer's Retell AI API key (encrypted before storage). Required to fetch their call/chat data."
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Voice Agent ID*"
+                  value={formData.voice_agent_id}
+                  onChange={(e) => setFormData({ ...formData, voice_agent_id: e.target.value })}
+                  placeholder="agent_voice_..."
+                  required
+                  helperText="Agent ID for voice calls"
+                />
+
+                <Input
+                  label="SMS Agent ID*"
+                  value={formData.sms_agent_id}
+                  onChange={(e) => setFormData({ ...formData, sms_agent_id: e.target.value })}
+                  placeholder="agent_sms_..."
+                  required
+                  helperText="Agent ID for SMS/text messages"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Retell Agent IDs */}
+          {/* Twilio API Configuration */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Retell Agent IDs*
-            </label>
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter Retell Agent ID (e.g., agent_abc123)"
-                  value={agentIdInput}
-                  onChange={(e) => setAgentIdInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      addAgentId()
-                    }
-                  }}
+            <h3 className="text-lg font-black gradient-text mb-3">Twilio API Configuration</h3>
+            <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Twilio Account SID*"
+                  type="password"
+                  value={formData.twilio_account_sid}
+                  onChange={(e) => setFormData({ ...formData, twilio_account_sid: e.target.value })}
+                  placeholder="AC..."
+                  required
+                  helperText="Customer's Twilio Account SID"
                 />
-                <Button type="button" onClick={addAgentId}>Add</Button>
+
+                <Input
+                  label="Twilio Auth Token*"
+                  type="password"
+                  value={formData.twilio_auth_token}
+                  onChange={(e) => setFormData({ ...formData, twilio_auth_token: e.target.value })}
+                  placeholder="Auth Token"
+                  required
+                  helperText="Customer's Twilio Auth Token"
+                />
               </div>
-              {formData.retell_agent_ids.length > 0 && (
-                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg">
-                  {formData.retell_agent_ids.map((agentId) => (
-                    <div
-                      key={agentId}
-                      className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                    >
-                      <span>{agentId}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeAgentId(agentId)}
-                        className="hover:text-blue-900"
-                      >
-                        ×
-                      </button>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Phone Numbers to Track*
+                </label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter phone number (e.g., +15551234567)"
+                      value={phoneNumberInput}
+                      onChange={(e) => setPhoneNumberInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addPhoneNumber()
+                        }
+                      }}
+                    />
+                    <Button type="button" onClick={addPhoneNumber}>Add</Button>
+                  </div>
+                  {formData.twilio_phone_numbers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      {formData.twilio_phone_numbers.map((phoneNum) => (
+                        <div
+                          key={phoneNum}
+                          className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full text-sm"
+                        >
+                          <span>{phoneNum}</span>
+                          <button
+                            type="button"
+                            onClick={() => removePhoneNumber(phoneNum)}
+                            className="hover:text-green-900 dark:hover:text-green-100"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Add phone numbers to filter Twilio usage for this customer. Use E.164 format (e.g., +15551234567).
+                  </p>
                 </div>
-              )}
-              <p className="text-sm text-gray-500">
-                Add one or more Retell Agent IDs. These will be used to filter chats/calls for billing.
-              </p>
+              </div>
             </div>
           </div>
 
@@ -439,11 +718,11 @@ export default function CustomersPage() {
             <input
               type="checkbox"
               id="auto_invoice"
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
               checked={formData.auto_invoice_enabled}
               onChange={(e) => setFormData({ ...formData, auto_invoice_enabled: e.target.checked })}
             />
-            <label htmlFor="auto_invoice" className="ml-2 text-sm text-gray-700">
+            <label htmlFor="auto_invoice" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
               Enable automatic invoice generation
             </label>
           </div>

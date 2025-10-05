@@ -5,7 +5,12 @@ export interface BillingCustomer {
   customer_email: string
   stripe_customer_id: string | null
   retell_agent_ids: string[]
+  voice_agent_id: string | null
+  sms_agent_id: string | null
   retell_api_key_encrypted: string | null
+  twilio_account_sid_encrypted: string | null
+  twilio_auth_token_encrypted: string | null
+  twilio_phone_numbers: string[]
   markup_percentage: number
   auto_invoice_enabled: boolean
   billing_contact_name: string | null
@@ -124,8 +129,15 @@ export interface CostBreakdown {
 
 export interface MonthlyTrend {
   month: string
-  twilioSMS: number
-  twilioVoice: number
-  retellAI: number
+  sunriseMedical?: number
+  valleyDental?: number
+  wellnessChiro?: number
+  pediatricAssoc?: number
+  eliteSports?: number
+  // Legacy fields for backward compatibility
+  twilioSMS?: number
+  twilioVoice?: number
+  retellAI?: number
   total: number
+  [key: string]: string | number | undefined // Allow dynamic customer keys
 }

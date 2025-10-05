@@ -26,7 +26,7 @@ class StripeInvoiceService {
       const apiKey = await this.decryptApiKey(settings.stripe_api_key_encrypted)
 
       this.stripe = new Stripe(apiKey, {
-        apiVersion: '2025-09-30.clover',
+        apiVersion: '2024-12-18.acacia',
         typescript: true
       })
 

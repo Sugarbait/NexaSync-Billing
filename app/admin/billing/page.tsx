@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { DollarSign, Users, FileText, TrendingUp, Building2 } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { DollarSign, Users, FileText, TrendingUp, Building2, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Input'
-import { formatCAD, formatDate, getPreviousMonthRange, getCurrentMonthRange } from '@/lib/utils/format'
+import { ParticleBackground } from '@/components/ui/ParticleBackground'
+import { formatCAD, formatDate, formatDateRange, getPreviousMonthRange, getCurrentMonthRange } from '@/lib/utils/format'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import type { InvoiceRecord, BillingCustomer, MonthlyTrend } from '@/lib/types/billing'
@@ -14,8 +15,12 @@ import Link from 'next/link'
 
 export default function BillingDashboard() {
   const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [customers, setCustomers] = useState<BillingCustomer[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all')
+  const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(getCurrentMonthRange())
+  const loadDashboardDataRef = useRef<() => Promise<void>>()
   const [stats, setStats] = useState({
     currentMonthRevenue: 0,
     previousMonthRevenue: 0,
@@ -31,16 +36,6 @@ export default function BillingDashboard() {
   const [recentInvoices, setRecentInvoices] = useState<InvoiceRecord[]>([])
   const [chartData, setChartData] = useState<MonthlyTrend[]>([])
 
-  useEffect(() => {
-    loadCustomers()
-  }, [])
-
-  useEffect(() => {
-    if (customers.length > 0) {
-      loadDashboardData()
-    }
-  }, [selectedCustomerId, customers])
-
   async function loadCustomers() {
     try {
       const { data } = await supabase
@@ -48,29 +43,17 @@ export default function BillingDashboard() {
         .select('*')
         .order('customer_name', { ascending: true })
 
-      if (data && data.length > 0) {
-        setCustomers(data)
-      } else {
-        // Use mock data if no database connection
-        setCustomers([
-          { id: '1', customer_name: 'Acme Corporation', customer_email: 'billing@acme.com', retell_agent_ids: ['agent_1'], markup_percentage: 20, auto_invoice_enabled: true, created_at: '2024-01-15' },
-          { id: '2', customer_name: 'Tech Innovations Inc', customer_email: 'accounts@techinnovations.com', retell_agent_ids: ['agent_2'], markup_percentage: 15, auto_invoice_enabled: true, created_at: '2024-02-20' },
-          { id: '3', customer_name: 'Global Solutions Ltd', customer_email: 'finance@globalsolutions.com', retell_agent_ids: ['agent_3'], markup_percentage: 25, auto_invoice_enabled: false, created_at: '2024-03-10' }
-        ] as any)
-      }
+      setCustomers(data || [])
     } catch (error) {
       console.error('Failed to load customers:', error)
-      // Use mock data on error
-      setCustomers([
-        { id: '1', customer_name: 'Acme Corporation', customer_email: 'billing@acme.com', retell_agent_ids: ['agent_1'], markup_percentage: 20, auto_invoice_enabled: true, created_at: '2024-01-15' },
-        { id: '2', customer_name: 'Tech Innovations Inc', customer_email: 'accounts@techinnovations.com', retell_agent_ids: ['agent_2'], markup_percentage: 15, auto_invoice_enabled: true, created_at: '2024-02-20' },
-        { id: '3', customer_name: 'Global Solutions Ltd', customer_email: 'finance@globalsolutions.com', retell_agent_ids: ['agent_3'], markup_percentage: 25, auto_invoice_enabled: false, created_at: '2024-03-10' }
-      ] as any)
+      setCustomers([])
     }
   }
 
-  async function loadDashboardData() {
-    setLoading(true)
+  const loadDashboardData = useCallback(async () => {
+    if (initialLoad) {
+      setLoading(true)
+    }
     try {
       // Load stats
       await Promise.all([
@@ -82,31 +65,56 @@ export default function BillingDashboard() {
         loadChartData(),
         loadCurrentMonthCosts()
       ])
+      setLastUpdated(new Date())
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {
-      setLoading(false)
+      if (initialLoad) {
+        setLoading(false)
+        setInitialLoad(false)
+      }
     }
-  }
+  }, [selectedCustomerId, customers, dateRange, initialLoad])
+
+  // Keep ref updated with latest loadDashboardData
+  useEffect(() => {
+    loadDashboardDataRef.current = loadDashboardData
+  }, [loadDashboardData])
+
+  useEffect(() => {
+    loadCustomers()
+  }, [])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
+
+  // Auto-refresh every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadDashboardDataRef.current?.()
+    }, 60000) // 60 seconds
+
+    return () => clearInterval(interval)
+  }, []) // No dependencies - interval never recreated
 
   async function loadCurrentMonthRevenue() {
     try {
-      const { start, end } = getCurrentMonthRange()
       let query = supabase
         .from('invoice_records')
         .select('total_amount_cad')
-        .gte('billing_period_start', start.toISOString().split('T')[0])
-        .lte('billing_period_end', end.toISOString().split('T')[0])
+        .gte('billing_period_start', dateRange.start.toISOString().split('T')[0])
+        .lte('billing_period_end', dateRange.end.toISOString().split('T')[0])
 
       if (selectedCustomerId !== 'all') {
         query = query.eq('billing_customer_id', selectedCustomerId)
       }
 
       const { data } = await query
-      const total = data?.reduce((sum, inv) => sum + Number(inv.total_amount_cad), 0) || (selectedCustomerId === 'all' ? 8695.80 : 3145.80)
+      const total = data?.reduce((sum, inv) => sum + Number(inv.total_amount_cad), 0) || 0
       setStats(prev => ({ ...prev, currentMonthRevenue: total }))
     } catch {
-      setStats(prev => ({ ...prev, currentMonthRevenue: selectedCustomerId === 'all' ? 8695.80 : 3145.80 }))
+      setStats(prev => ({ ...prev, currentMonthRevenue: 0 }))
     }
   }
 
@@ -124,10 +132,10 @@ export default function BillingDashboard() {
       }
 
       const { data } = await query
-      const total = data?.reduce((sum, inv) => sum + Number(inv.total_amount_cad), 0) || (selectedCustomerId === 'all' ? 7834.25 : 2890.50)
+      const total = data?.reduce((sum, inv) => sum + Number(inv.total_amount_cad), 0) || 0
       setStats(prev => ({ ...prev, previousMonthRevenue: total }))
     } catch {
-      setStats(prev => ({ ...prev, previousMonthRevenue: selectedCustomerId === 'all' ? 7834.25 : 2890.50 }))
+      setStats(prev => ({ ...prev, previousMonthRevenue: 0 }))
     }
   }
 
@@ -137,12 +145,12 @@ export default function BillingDashboard() {
         const { count } = await supabase
           .from('billing_customers')
           .select('*', { count: 'exact', head: true })
-        setStats(prev => ({ ...prev, totalCustomers: count || 3 }))
+        setStats(prev => ({ ...prev, totalCustomers: count || 0 }))
       } else {
         setStats(prev => ({ ...prev, totalCustomers: 1 }))
       }
     } catch {
-      setStats(prev => ({ ...prev, totalCustomers: selectedCustomerId === 'all' ? 3 : 1 }))
+      setStats(prev => ({ ...prev, totalCustomers: 0 }))
     }
   }
 
@@ -152,15 +160,17 @@ export default function BillingDashboard() {
         .from('invoice_records')
         .select('*', { count: 'exact', head: true })
         .in('invoice_status', ['draft', 'sent'])
+        .gte('billing_period_start', dateRange.start.toISOString().split('T')[0])
+        .lte('billing_period_end', dateRange.end.toISOString().split('T')[0])
 
       if (selectedCustomerId !== 'all') {
         query = query.eq('billing_customer_id', selectedCustomerId)
       }
 
       const { count } = await query
-      setStats(prev => ({ ...prev, pendingInvoices: count || (selectedCustomerId === 'all' ? 5 : 2) }))
+      setStats(prev => ({ ...prev, pendingInvoices: count || 0 }))
     } catch {
-      setStats(prev => ({ ...prev, pendingInvoices: selectedCustomerId === 'all' ? 5 : 2 }))
+      setStats(prev => ({ ...prev, pendingInvoices: 0 }))
     }
   }
 
@@ -171,6 +181,8 @@ export default function BillingDashboard() {
         *,
         billing_customers!inner(customer_name, customer_email)
       `)
+      .gte('billing_period_start', dateRange.start.toISOString().split('T')[0])
+      .lte('billing_period_end', dateRange.end.toISOString().split('T')[0])
       .order('created_at', { ascending: false })
       .limit(10)
 
@@ -184,12 +196,11 @@ export default function BillingDashboard() {
 
   async function loadCurrentMonthCosts() {
     try {
-      const { start, end } = getCurrentMonthRange()
       let query = supabase
         .from('invoice_records')
         .select('twilio_sms_cost_cad, twilio_voice_cost_cad, retell_ai_cost_cad')
-        .gte('billing_period_start', start.toISOString().split('T')[0])
-        .lte('billing_period_end', end.toISOString().split('T')[0])
+        .gte('billing_period_start', dateRange.start.toISOString().split('T')[0])
+        .lte('billing_period_end', dateRange.end.toISOString().split('T')[0])
 
       if (selectedCustomerId !== 'all') {
         query = query.eq('billing_customer_id', selectedCustomerId)
@@ -197,52 +208,26 @@ export default function BillingDashboard() {
 
       const { data } = await query
 
-      if (data && data.length > 0) {
-        const twilioSMS = data.reduce((sum, inv) => sum + Number(inv.twilio_sms_cost_cad || 0), 0)
-        const twilioVoice = data.reduce((sum, inv) => sum + Number(inv.twilio_voice_cost_cad || 0), 0)
-        const retellAI = data.reduce((sum, inv) => sum + Number(inv.retell_ai_cost_cad || 0), 0)
-        const total = twilioSMS + twilioVoice + retellAI
-
-        setStats(prev => ({
-          ...prev,
-          currentMonthCosts: { twilioSMS, twilioVoice, retellAI, total }
-        }))
-      } else {
-        // Mock data
-        const mockCosts = selectedCustomerId === 'all'
-          ? { twilioSMS: 1850.50, twilioVoice: 3245.75, retellAI: 2150.25, total: 7246.50 }
-          : { twilioSMS: 645.25, twilioVoice: 1125.50, retellAI: 850.75, total: 2621.50 }
-
-        setStats(prev => ({
-          ...prev,
-          currentMonthCosts: mockCosts
-        }))
-      }
-    } catch (error) {
-      // Mock data on error
-      const mockCosts = selectedCustomerId === 'all'
-        ? { twilioSMS: 1850.50, twilioVoice: 3245.75, retellAI: 2150.25, total: 7246.50 }
-        : { twilioSMS: 645.25, twilioVoice: 1125.50, retellAI: 850.75, total: 2621.50 }
+      const twilioSMS = data?.reduce((sum, inv) => sum + Number(inv.twilio_sms_cost_cad || 0), 0) || 0
+      const twilioVoice = data?.reduce((sum, inv) => sum + Number(inv.twilio_voice_cost_cad || 0), 0) || 0
+      const retellAI = data?.reduce((sum, inv) => sum + Number(inv.retell_ai_cost_cad || 0), 0) || 0
+      const total = twilioSMS + twilioVoice + retellAI
 
       setStats(prev => ({
         ...prev,
-        currentMonthCosts: mockCosts
+        currentMonthCosts: { twilioSMS, twilioVoice, retellAI, total }
+      }))
+    } catch (error) {
+      setStats(prev => ({
+        ...prev,
+        currentMonthCosts: { twilioSMS: 0, twilioVoice: 0, retellAI: 0, total: 0 }
       }))
     }
   }
 
   async function loadChartData() {
-    // TODO: Implement monthly trend calculation
-    // For now, mock data
-    const mockData: MonthlyTrend[] = [
-      { month: 'May', twilioSMS: 1200, twilioVoice: 800, retellAI: 1500, total: 3500 },
-      { month: 'Jun', twilioSMS: 1400, twilioVoice: 900, retellAI: 1600, total: 3900 },
-      { month: 'Jul', twilioSMS: 1300, twilioVoice: 850, retellAI: 1550, total: 3700 },
-      { month: 'Aug', twilioSMS: 1600, twilioVoice: 1000, retellAI: 1800, total: 4400 },
-      { month: 'Sep', twilioSMS: 1500, twilioVoice: 950, retellAI: 1700, total: 4150 },
-      { month: 'Oct', twilioSMS: 1700, twilioVoice: 1100, retellAI: 1900, total: 4700 }
-    ]
-    setChartData(mockData)
+    // TODO: Implement monthly trend calculation from database
+    setChartData([])
   }
 
   function getStatusColor(status: string): 'gray' | 'blue' | 'green' | 'red' | 'yellow' {
@@ -260,10 +245,10 @@ export default function BillingDashboard() {
     return (
       <div className="p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              <div key={i} className="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
             ))}
           </div>
         </div>
@@ -273,37 +258,107 @@ export default function BillingDashboard() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-black gradient-text">Billing Admin</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Manage customers, generate invoices, and track revenue</p>
+      <div className="mb-8">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-black gradient-text">Billing Admin</h1>
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <RefreshCw className="w-4 h-4" />
+                <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+              </div>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">Manage customers, generate invoices, and track revenue • Auto-refreshes every minute</p>
+          </div>
+
+          {/* Company Selector */}
+          <div className="w-72">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <Building2 className="w-4 h-4 inline mr-2" />
+              Filter by Company
+            </label>
+            <Select
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+              options={[
+                { value: 'all', label: 'All Companies' },
+                ...customers.map(c => ({
+                  value: c.id,
+                  label: c.customer_name
+                }))
+              ]}
+            />
+          </div>
         </div>
 
-        {/* Company Selector */}
-        <div className="w-72">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            <Building2 className="w-4 h-4 inline mr-2" />
-            Filter by Company
-          </label>
-          <Select
-            value={selectedCustomerId}
-            onChange={(e) => setSelectedCustomerId(e.target.value)}
-            options={[
-              { value: 'all', label: 'All Companies' },
-              ...customers.map(c => ({
-                value: c.id,
-                label: c.customer_name
-              }))
-            ]}
-          />
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">From:</label>
+            <input
+              type="date"
+              value={dateRange.start.toISOString().split('T')[0]}
+              onChange={(e) => setDateRange({ ...dateRange, start: new Date(e.target.value) })}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">To:</label>
+            <input
+              type="date"
+              value={dateRange.end.toISOString().split('T')[0]}
+              onChange={(e) => setDateRange({ ...dateRange, end: new Date(e.target.value) })}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex gap-2 ml-4">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                setDateRange({ start: today, end: today })
+              }}
+            >
+              Today
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDateRange(getCurrentMonthRange())}
+            >
+              This Month
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDateRange(getPreviousMonthRange())}
+            >
+              Last Month
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const end = new Date()
+                const start = new Date()
+                start.setMonth(start.getMonth() - 3)
+                setDateRange({ start, end })
+              }}
+            >
+              Last 3 Months
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Combined Cost - Large Display */}
-      <Card className="mb-8 bg-gradient-to-br from-blue-600 to-purple-600 border-none">
-        <CardContent className="p-8">
+      <Card className="mb-8 bg-gradient-to-br from-blue-600 to-purple-600 border-none relative overflow-hidden">
+        <ParticleBackground />
+        <CardContent className="p-8 relative z-10">
           <div className="text-center">
-            <p className="text-white/80 text-lg mb-2">Current Month Total Cost</p>
+            <p className="text-white/80 text-lg mb-2">Total Cost ({formatDateRange(dateRange)})</p>
             <p className="text-6xl font-black text-white mb-4">{formatCAD(stats.currentMonthCosts.total)}</p>
             <div className="flex items-center justify-center gap-8 text-white/90">
               <div>
@@ -331,7 +386,7 @@ export default function BillingDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Current Month (MTD)</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue (Selected Period)</p>
                 <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCAD(stats.currentMonthRevenue)}</p>
               </div>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -345,8 +400,13 @@ export default function BillingDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Previous Month</p>
-                <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCAD(stats.previousMonthRevenue)}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Growth vs Previous Period</p>
+                <p className="text-4xl font-bold text-green-600 dark:text-green-400">
+                  {stats.previousMonthRevenue > 0
+                    ? `${((stats.currentMonthRevenue - stats.previousMonthRevenue) / stats.previousMonthRevenue * 100).toFixed(1)}%`
+                    : '0%'
+                  }
+                </p>
               </div>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
@@ -403,21 +463,42 @@ export default function BillingDashboard() {
       {/* Monthly Trends Chart */}
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Revenue Trends (Last 6 Months)</CardTitle>
+          <CardTitle>Revenue by Company (Last 6 Months)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis tickFormatter={(value) => `$${value}`} />
-              <Tooltip formatter={(value) => `${formatCAD(Number(value))}`} />
-              <Legend />
-              <Bar dataKey="twilioSMS" stackId="a" fill="#3B82F6" name="Twilio SMS" />
-              <Bar dataKey="twilioVoice" stackId="a" fill="#6366F1" name="Twilio Voice" />
-              <Bar dataKey="retellAI" stackId="a" fill="#10B981" name="Retell AI" />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData.length === 0 ? (
+            <div className="flex items-center justify-center h-[300px] text-gray-500 dark:text-gray-400">
+              <p>No revenue data available yet. Start by adding customers and generating invoices.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
+                <XAxis dataKey="month" className="fill-gray-700 dark:fill-gray-300" />
+                <YAxis tickFormatter={(value) => `$${value}`} className="fill-gray-700 dark:fill-gray-300" />
+                <Tooltip
+                  formatter={(value) => `${formatCAD(Number(value))}`}
+                  contentStyle={{
+                    backgroundColor: 'var(--card-bg)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '0.5rem',
+                    color: 'var(--text-primary)'
+                  }}
+                  labelStyle={{
+                    color: 'var(--text-primary)'
+                  }}
+                  itemStyle={{
+                    color: 'var(--text-primary)'
+                  }}
+                />
+                <Legend wrapperStyle={{ color: 'var(--text-secondary)' }} />
+                <Bar dataKey="sunriseMedical" stackId="a" fill="#3B82F6" name="Sunrise Medical Clinic" />
+                <Bar dataKey="valleyDental" stackId="a" fill="#6366F1" name="Valley Dental Group" />
+                <Bar dataKey="wellnessChiro" stackId="a" fill="#10B981" name="Wellness Chiropractic" />
+                <Bar dataKey="pediatricAssoc" stackId="a" fill="#F59E0B" name="Pediatric Associates" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 

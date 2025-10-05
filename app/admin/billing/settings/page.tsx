@@ -27,8 +27,6 @@ export default function SettingsPage() {
   const [stripeApiKey, setStripeApiKey] = useState('')
   const [stripePublishableKey, setStripePublishableKey] = useState('')
   const [retellApiKey, setRetellApiKey] = useState('')
-  const [twilioAccountSid, setTwilioAccountSid] = useState('')
-  const [twilioAuthToken, setTwilioAuthToken] = useState('')
 
   useEffect(() => {
     loadSettings()
@@ -78,24 +76,12 @@ export default function SettingsPage() {
         encryptedRetellKey = await stripeInvoiceService.encryptApiKey(retellApiKey)
       }
 
-      // Encrypt Twilio credentials if provided
-      let encryptedTwilioSid = settings.twilio_account_sid_encrypted
-      let encryptedTwilioToken = settings.twilio_auth_token_encrypted
-      if (twilioAccountSid) {
-        encryptedTwilioSid = await stripeInvoiceService.encryptApiKey(twilioAccountSid)
-      }
-      if (twilioAuthToken) {
-        encryptedTwilioToken = await stripeInvoiceService.encryptApiKey(twilioAuthToken)
-      }
-
       const settingsToSave = {
         ...settings,
         user_id: userData.user.id,
         stripe_api_key_encrypted: encryptedStripeKey,
         stripe_publishable_key: stripePublishableKey,
-        retell_api_key_encrypted: encryptedRetellKey,
-        twilio_account_sid_encrypted: encryptedTwilioSid,
-        twilio_auth_token_encrypted: encryptedTwilioToken
+        retell_api_key_encrypted: encryptedRetellKey
       }
 
       const { error } = await supabase
@@ -109,8 +95,6 @@ export default function SettingsPage() {
       alert('Settings saved successfully')
       setStripeApiKey('') // Clear for security
       setRetellApiKey('') // Clear for security
-      setTwilioAccountSid('') // Clear for security
-      setTwilioAuthToken('') // Clear for security
       loadSettings()
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -145,10 +129,10 @@ export default function SettingsPage() {
     return (
       <div className="p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-64 bg-gray-200 rounded"></div>
+              <div key={i} className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
             ))}
           </div>
         </div>
@@ -376,55 +360,6 @@ export default function SettingsPage() {
             <Button onClick={saveSettings} loading={saving}>
               <Save className="w-4 h-4 mr-2" />
               Save Notification Settings
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Twilio Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Twilio Integration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-              <p className="text-sm text-blue-800 dark:text-blue-300">
-                Configure Twilio API to automatically fetch SMS and Voice usage data with actual costs.
-              </p>
-            </div>
-
-            <Input
-              label="Twilio Account SID"
-              type="password"
-              value={twilioAccountSid}
-              onChange={(e) => setTwilioAccountSid(e.target.value)}
-              placeholder="AC... (Your Twilio Account SID)"
-              helperText="Your Twilio Account SID will be encrypted and stored securely. Leave blank to keep existing."
-            />
-
-            <Input
-              label="Twilio Auth Token"
-              type="password"
-              value={twilioAuthToken}
-              onChange={(e) => setTwilioAuthToken(e.target.value)}
-              placeholder="Enter your Twilio Auth Token"
-              helperText="Your Twilio Auth Token will be encrypted and stored securely. Leave blank to keep existing."
-            />
-
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={settings.twilio_api_enabled}
-                  onChange={(e) => setSettings({ ...settings, twilio_api_enabled: e.target.checked })}
-                  className="mr-2 rounded"
-                />
-                <span className="text-sm text-gray-600 dark:text-gray-400">Enable Twilio API integration for automatic cost calculation</span>
-              </label>
-            </div>
-
-            <Button onClick={saveSettings} loading={saving}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Twilio Settings
             </Button>
           </CardContent>
         </Card>

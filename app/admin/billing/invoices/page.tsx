@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Search, Download, Eye, Send, CheckCircle, ExternalLink } from 'lucide-react'
+import { Search, Download, Eye, Send, CheckCircle, ExternalLink, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { stripeInvoiceService } from '@/lib/services/stripeInvoiceService'
 import type { InvoiceRecord } from '@/lib/types/billing'
 import { formatCAD, formatDate, convertToCSV, downloadFile } from '@/lib/utils/format'
+import Link from 'next/link'
 
 interface InvoiceWithCustomer extends InvoiceRecord {
   billing_customers?: {
@@ -69,79 +70,10 @@ export default function InvoicesPage() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-
-      if (data && data.length > 0) {
-        setInvoices(data)
-      } else {
-        // Use mock data if no Supabase connection
-        const mockInvoice: InvoiceWithCustomer = {
-          id: 'demo-invoice-1',
-          billing_customer_id: 'demo-customer-1',
-          stripe_invoice_id: 'in_demo123456',
-          invoice_number: 'INV-2025-001',
-          billing_period_start: new Date(2025, 0, 1).toISOString(),
-          billing_period_end: new Date(2025, 0, 31).toISOString(),
-          total_chats: 245,
-          total_calls: 128,
-          total_sms_segments: 892,
-          total_call_minutes: 156.5,
-          twilio_sms_cost_cad: 10.75,
-          twilio_voice_cost_cad: 5.00,
-          retell_ai_chat_cost_cad: 24.50,
-          retell_ai_voice_cost_cad: 12.80,
-          subtotal_cad: 53.05,
-          markup_amount_cad: 10.61,
-          total_amount_cad: 63.66,
-          invoice_status: 'sent',
-          stripe_invoice_url: null,
-          stripe_invoice_pdf_url: null,
-          created_at: new Date(2025, 1, 1).toISOString(),
-          sent_at: new Date(2025, 1, 1).toISOString(),
-          paid_at: null,
-          due_date: new Date(2025, 1, 31).toISOString(),
-          created_by: 'demo-user-1',
-          billing_customers: {
-            customer_name: 'Demo Healthcare Clinic',
-            customer_email: 'billing@demohealthcare.com'
-          }
-        }
-        setInvoices([mockInvoice])
-      }
+      setInvoices(data || [])
     } catch (error) {
       console.error('Failed to load invoices:', error)
-      // Fallback to mock data on error
-      const mockInvoice: InvoiceWithCustomer = {
-        id: 'demo-invoice-1',
-        billing_customer_id: 'demo-customer-1',
-        stripe_invoice_id: 'in_demo123456',
-        invoice_number: 'INV-2025-001',
-        billing_period_start: new Date(2025, 0, 1).toISOString(),
-        billing_period_end: new Date(2025, 0, 31).toISOString(),
-        total_chats: 245,
-        total_calls: 128,
-        total_sms_segments: 892,
-        total_call_minutes: 156.5,
-        twilio_sms_cost_cad: 10.75,
-        twilio_voice_cost_cad: 5.00,
-        retell_ai_chat_cost_cad: 24.50,
-        retell_ai_voice_cost_cad: 12.80,
-        subtotal_cad: 53.05,
-        markup_amount_cad: 10.61,
-        total_amount_cad: 63.66,
-        invoice_status: 'sent',
-        stripe_invoice_url: null,
-        stripe_invoice_pdf_url: null,
-        created_at: new Date(2025, 1, 1).toISOString(),
-        sent_at: new Date(2025, 1, 1).toISOString(),
-        paid_at: null,
-        due_date: new Date(2025, 1, 31).toISOString(),
-        created_by: 'demo-user-1',
-        billing_customers: {
-          customer_name: 'Demo Healthcare Clinic',
-          customer_email: 'billing@demohealthcare.com'
-        }
-      }
-      setInvoices([mockInvoice])
+      setInvoices([])
     } finally {
       setLoading(false)
     }
@@ -243,8 +175,8 @@ export default function InvoicesPage() {
     return (
       <div className="p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
+          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     )
@@ -255,12 +187,20 @@ export default function InvoicesPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black gradient-text">Invoice History</h1>
-          <p className="text-gray-600 mt-2">View and manage all invoices</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">View and manage all invoices</p>
         </div>
-        <Button onClick={exportToCSV}>
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/admin/billing/invoices/generate">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Generate Invoices
+            </Button>
+          </Link>
+          <Button variant="secondary" onClick={exportToCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -319,7 +259,11 @@ export default function InvoicesPage() {
                   </tr>
                 ) : (
                   filteredInvoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <tr
+                      key={invoice.id}
+                      className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      onClick={() => viewDetails(invoice)}
+                    >
                       <td className="py-3 px-4 text-sm font-mono text-gray-900 dark:text-gray-100">
                         {invoice.invoice_number || invoice.stripe_invoice_id?.slice(0, 8) || 'N/A'}
                       </td>
@@ -344,7 +288,7 @@ export default function InvoicesPage() {
                           {invoice.invoice_status}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-sm">
+                      <td className="py-3 px-4 text-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => viewDetails(invoice)}
@@ -355,7 +299,10 @@ export default function InvoicesPage() {
                           </button>
                           {invoice.invoice_status === 'draft' && (
                             <button
-                              onClick={() => sendInvoice(invoice)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                sendInvoice(invoice)
+                              }}
                               className="text-green-600 hover:text-green-700"
                               title="Send Invoice"
                             >
@@ -364,7 +311,10 @@ export default function InvoicesPage() {
                           )}
                           {invoice.invoice_status === 'sent' && (
                             <button
-                              onClick={() => markAsPaid(invoice)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                markAsPaid(invoice)
+                              }}
                               className="text-green-600 hover:text-green-700"
                               title="Mark as Paid"
                             >
@@ -378,6 +328,7 @@ export default function InvoicesPage() {
                               rel="noopener noreferrer"
                               className="text-gray-600 hover:text-gray-700"
                               title="View in Stripe"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <ExternalLink className="w-4 h-4" />
                             </a>
@@ -404,24 +355,24 @@ export default function InvoicesPage() {
           <div className="space-y-6">
             {/* Customer Information */}
             <div>
-              <h3 className="text-lg font-semibold mb-3">Customer Information</h3>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Customer Information</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600">Customer Name</p>
-                  <p className="font-medium">{selectedInvoice.billing_customers?.customer_name || 'Unknown Customer'}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Customer Name</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedInvoice.billing_customers?.customer_name || 'Unknown Customer'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Email</p>
-                  <p className="font-medium">{selectedInvoice.billing_customers?.customer_email || 'N/A'}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedInvoice.billing_customers?.customer_email || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Billing Period</p>
-                  <p className="font-medium">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Billing Period</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
                     {formatDate(selectedInvoice.billing_period_start)} - {formatDate(selectedInvoice.billing_period_end)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Status</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
                   <Badge color={getStatusColor(selectedInvoice.invoice_status)}>
                     {selectedInvoice.invoice_status}
                   </Badge>
@@ -431,68 +382,68 @@ export default function InvoicesPage() {
 
             {/* Usage Summary */}
             <div>
-              <h3 className="text-lg font-semibold mb-3">Usage Summary</h3>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Usage Summary</h3>
               <div className="grid grid-cols-4 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Total Chats</p>
-                  <p className="text-2xl font-bold">{selectedInvoice.total_chats || 0}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Chats</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{selectedInvoice.total_chats || 0}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Total Calls</p>
-                  <p className="text-2xl font-bold">{selectedInvoice.total_calls || 0}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Calls</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{selectedInvoice.total_calls || 0}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">SMS Segments</p>
-                  <p className="text-2xl font-bold">{selectedInvoice.total_sms_segments || 0}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">SMS Segments</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{selectedInvoice.total_sms_segments || 0}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Call Minutes</p>
-                  <p className="text-2xl font-bold">{(selectedInvoice.total_call_minutes || 0).toFixed(1)}</p>
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Call Minutes</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{(selectedInvoice.total_call_minutes || 0).toFixed(1)}</p>
                 </div>
               </div>
             </div>
 
             {/* Cost Breakdown */}
             <div>
-              <h3 className="text-lg font-semibold mb-3">Cost Breakdown</h3>
+              <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">Cost Breakdown</h3>
               <table className="w-full">
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   <tr>
-                    <td className="py-2">Twilio SMS Services</td>
-                    <td className="py-2 text-right">{formatCAD(Number(selectedInvoice.twilio_sms_cost_cad || 0))}</td>
+                    <td className="py-2 text-gray-900 dark:text-gray-100">Twilio SMS Services</td>
+                    <td className="py-2 text-right text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.twilio_sms_cost_cad || 0))}</td>
                   </tr>
                   <tr>
-                    <td className="py-2">Twilio Voice Services</td>
-                    <td className="py-2 text-right">{formatCAD(Number(selectedInvoice.twilio_voice_cost_cad || 0))}</td>
+                    <td className="py-2 text-gray-900 dark:text-gray-100">Twilio Voice Services</td>
+                    <td className="py-2 text-right text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.twilio_voice_cost_cad || 0))}</td>
                   </tr>
                   <tr>
-                    <td className="py-2">Retell AI Chat Services</td>
-                    <td className="py-2 text-right">{formatCAD(Number(selectedInvoice.retell_ai_chat_cost_cad || 0))}</td>
+                    <td className="py-2 text-gray-900 dark:text-gray-100">Retell AI Chat Services</td>
+                    <td className="py-2 text-right text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.retell_ai_chat_cost_cad || 0))}</td>
                   </tr>
                   <tr>
-                    <td className="py-2">Retell AI Voice Services</td>
-                    <td className="py-2 text-right">{formatCAD(Number(selectedInvoice.retell_ai_voice_cost_cad || 0))}</td>
+                    <td className="py-2 text-gray-900 dark:text-gray-100">Retell AI Voice Services</td>
+                    <td className="py-2 text-right text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.retell_ai_voice_cost_cad || 0))}</td>
                   </tr>
-                  <tr className="border-t-2">
-                    <td className="py-2 font-semibold">Subtotal</td>
-                    <td className="py-2 text-right font-semibold">{formatCAD(Number(selectedInvoice.subtotal_cad || 0))}</td>
+                  <tr className="border-t-2 border-gray-300 dark:border-gray-600">
+                    <td className="py-2 font-semibold text-gray-900 dark:text-gray-100">Subtotal</td>
+                    <td className="py-2 text-right font-semibold text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.subtotal_cad || 0))}</td>
                   </tr>
                   {(selectedInvoice.markup_amount_cad || 0) > 0 && (
                     <tr>
-                      <td className="py-2">Service Markup</td>
-                      <td className="py-2 text-right">{formatCAD(Number(selectedInvoice.markup_amount_cad || 0))}</td>
+                      <td className="py-2 text-gray-900 dark:text-gray-100">Service Markup</td>
+                      <td className="py-2 text-right text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.markup_amount_cad || 0))}</td>
                     </tr>
                   )}
-                  <tr className="border-t-2 border-black">
-                    <td className="py-2 font-bold text-lg">Total</td>
-                    <td className="py-2 text-right font-bold text-lg">{formatCAD(Number(selectedInvoice.total_amount_cad || 0))}</td>
+                  <tr className="border-t-2 border-gray-900 dark:border-gray-100">
+                    <td className="py-2 font-bold text-lg text-gray-900 dark:text-gray-100">Total</td>
+                    <td className="py-2 text-right font-bold text-lg text-gray-900 dark:text-gray-100">{formatCAD(Number(selectedInvoice.total_amount_cad || 0))}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-4 pt-4 border-t">
+            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               {selectedInvoice.stripe_invoice_url && (
                 <Button
                   variant="secondary"
