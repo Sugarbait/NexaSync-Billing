@@ -20,7 +20,7 @@ export default function BillingDashboard() {
   const [customers, setCustomers] = useState<BillingCustomer[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(getCurrentMonthRange())
-  const loadDashboardDataRef = useRef<() => Promise<void>>()
+  const loadDashboardDataRef = useRef<(() => Promise<void>) | undefined>(undefined)
   const [stats, setStats] = useState({
     currentMonthRevenue: 0,
     previousMonthRevenue: 0,
