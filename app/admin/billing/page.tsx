@@ -328,21 +328,24 @@ export default function BillingDashboard() {
                 setDateRange({ start: today, end: today })
               }}
             >
-              Today
+              <span className="hidden sm:inline">Today</span>
+              <span className="sm:hidden">1D</span>
             </Button>
             <Button
               variant="secondary"
               size="sm"
               onClick={() => setDateRange(getCurrentMonthRange())}
             >
-              This Month
+              <span className="hidden sm:inline">This Month</span>
+              <span className="sm:hidden">MTD</span>
             </Button>
             <Button
               variant="secondary"
               size="sm"
               onClick={() => setDateRange(getPreviousMonthRange())}
             >
-              Last Month
+              <span className="hidden sm:inline">Last Month</span>
+              <span className="sm:hidden">LM</span>
             </Button>
             <Button
               variant="secondary"
@@ -355,7 +358,7 @@ export default function BillingDashboard() {
               }}
             >
               <span className="hidden sm:inline">Last 3 Months</span>
-              <span className="sm:hidden">3 Months</span>
+              <span className="sm:hidden">3M</span>
             </Button>
           </div>
         </div>

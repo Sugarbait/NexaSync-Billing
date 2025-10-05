@@ -59,6 +59,11 @@ class CloudSyncService {
    * Get or create a unique device ID
    */
   private getOrCreateDeviceId(): string {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return 'server_device_temp'
+    }
+
     let deviceId = localStorage.getItem('billing_device_id')
     if (!deviceId) {
       if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -139,27 +144,35 @@ class CloudSyncService {
         // 42P01 = table does not exist (migration not run)
         if (error.code === '42P01') {
           console.warn('CloudSyncService: user_preferences table does not exist. Run the migration in Supabase.')
-          // Save to localStorage only
-          localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+          // Save to localStorage only (browser only)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+          }
           return { success: true, message: 'Saved locally - table not found' }
         }
 
         console.warn('CloudSyncService: Sync to cloud error (code: ' + error.code + '):', error.message)
-        // Save to localStorage as fallback
-        localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+        // Save to localStorage as fallback (browser only)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+        }
         return { success: false, message: error.message }
       }
 
-      // Save to localStorage as cache
-      localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
-      localStorage.setItem(`lastSync_${this.userId}`, new Date().toISOString())
+      // Save to localStorage as cache (browser only)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+        localStorage.setItem(`lastSync_${this.userId}`, new Date().toISOString())
+      }
 
       console.log('CloudSyncService: Preferences synced to cloud')
       return { success: true, message: 'Preferences synced successfully' }
     } catch (error) {
       console.warn('CloudSyncService: Sync to cloud error:', error)
-      // Save to localStorage as fallback
-      localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+      // Save to localStorage as fallback (browser only)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+      }
       return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
@@ -202,9 +215,11 @@ class CloudSyncService {
       if (data) {
         const preferences = data.preferences as UserPreferences
 
-        // Save to localStorage as cache
-        localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
-        localStorage.setItem(`lastSync_${this.userId}`, new Date().toISOString())
+        // Save to localStorage as cache (browser only)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+          localStorage.setItem(`lastSync_${this.userId}`, new Date().toISOString())
+        }
 
         console.log('CloudSyncService: Preferences synced from cloud')
         return { success: true, preferences, message: 'Preferences loaded successfully' }
@@ -243,13 +258,15 @@ class CloudSyncService {
           if (payload.new && payload.new.device_id !== this.deviceId) {
             const preferences = payload.new.preferences as UserPreferences
 
-            // Update localStorage cache
-            localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+            // Update localStorage cache (browser only)
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
 
-            // Dispatch event to notify components
-            window.dispatchEvent(new CustomEvent('cloudPreferencesUpdated', {
-              detail: preferences
-            }))
+              // Dispatch event to notify components
+              window.dispatchEvent(new CustomEvent('cloudPreferencesUpdated', {
+                detail: preferences
+              }))
+            }
           }
         }
       )
@@ -314,6 +331,11 @@ class CloudSyncService {
       return { success: false, message: 'User not authenticated' }
     }
 
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return { success: false, message: 'Not in browser environment' }
+    }
+
     try {
       // Get current local preferences
       const localPrefs = localStorage.getItem(`preferences_${this.userId}`)
@@ -338,7 +360,11 @@ class CloudSyncService {
    * Get sync status
    */
   public getSyncStatus(): { enabled: boolean; lastSync?: string; deviceId: string } {
-    const lastSync = localStorage.getItem(`lastSync_${this.userId}`)
+    // Check if we're in a browser environment
+    const lastSync = typeof window !== 'undefined'
+      ? localStorage.getItem(`lastSync_${this.userId}`)
+      : null
+
     return {
       enabled: this.syncEnabled,
       lastSync: lastSync || undefined,
@@ -351,6 +377,11 @@ class CloudSyncService {
    */
   public getCachedPreferences(): UserPreferences | null {
     if (!this.userId) return null
+
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      return null
+    }
 
     const cached = localStorage.getItem(`preferences_${this.userId}`)
     if (cached) {
