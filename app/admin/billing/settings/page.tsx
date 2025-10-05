@@ -27,6 +27,8 @@ export default function SettingsPage() {
   const [stripeApiKey, setStripeApiKey] = useState('')
   const [stripePublishableKey, setStripePublishableKey] = useState('')
   const [retellApiKey, setRetellApiKey] = useState('')
+  const [vonageApiKey, setVonageApiKey] = useState('')
+  const [vonageApiSecret, setVonageApiSecret] = useState('')
 
   useEffect(() => {
     loadSettings()
@@ -76,12 +78,24 @@ export default function SettingsPage() {
         encryptedRetellKey = await stripeInvoiceService.encryptApiKey(retellApiKey)
       }
 
+      // Encrypt Vonage API credentials if provided
+      let encryptedVonageKey = settings.vonage_api_key_encrypted
+      let encryptedVonageSecret = settings.vonage_api_secret_encrypted
+      if (vonageApiKey) {
+        encryptedVonageKey = await stripeInvoiceService.encryptApiKey(vonageApiKey)
+      }
+      if (vonageApiSecret) {
+        encryptedVonageSecret = await stripeInvoiceService.encryptApiKey(vonageApiSecret)
+      }
+
       const settingsToSave = {
         ...settings,
         user_id: userData.user.id,
         stripe_api_key_encrypted: encryptedStripeKey,
         stripe_publishable_key: stripePublishableKey,
-        retell_api_key_encrypted: encryptedRetellKey
+        retell_api_key_encrypted: encryptedRetellKey,
+        vonage_api_key_encrypted: encryptedVonageKey,
+        vonage_api_secret_encrypted: encryptedVonageSecret
       }
 
       const { error } = await supabase
@@ -95,6 +109,8 @@ export default function SettingsPage() {
       alert('Settings saved successfully')
       setStripeApiKey('') // Clear for security
       setRetellApiKey('') // Clear for security
+      setVonageApiKey('') // Clear for security
+      setVonageApiSecret('') // Clear for security
       loadSettings()
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -237,6 +253,59 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Vonage Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Vonage API Integration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-4 rounded-lg">
+              <p className="text-sm text-purple-800 dark:text-purple-300">
+                Configure Vonage (formerly Nexmo) for SMS and Voice services. Your API credentials are encrypted and stored securely.
+              </p>
+            </div>
+
+            <Input
+              label="Vonage API Key"
+              type="password"
+              value={vonageApiKey}
+              onChange={(e) => setVonageApiKey(e.target.value)}
+              placeholder="Enter your Vonage API Key"
+              helperText="Your Vonage API Key. Leave blank to keep existing key."
+            />
+
+            <Input
+              label="Vonage API Secret"
+              type="password"
+              value={vonageApiSecret}
+              onChange={(e) => setVonageApiSecret(e.target.value)}
+              placeholder="Enter your Vonage API Secret"
+              helperText="Your Vonage API Secret. Leave blank to keep existing secret."
+            />
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="vonage_enabled"
+                checked={settings.vonage_api_enabled || false}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  vonage_api_enabled: e.target.checked
+                })}
+                className="mr-2 rounded"
+              />
+              <label htmlFor="vonage_enabled" className="text-sm text-gray-600 dark:text-gray-400">
+                Enable Vonage API integration for cost tracking
+              </label>
+            </div>
+
+            <Button onClick={saveSettings} loading={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              Save Vonage Settings
+            </Button>
           </CardContent>
         </Card>
 

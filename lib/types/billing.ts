@@ -65,6 +65,9 @@ export interface BillingSettings {
   twilio_account_sid_encrypted: string | null
   twilio_auth_token_encrypted: string | null
   twilio_api_enabled: boolean
+  vonage_api_key_encrypted: string | null
+  vonage_api_secret_encrypted: string | null
+  vonage_api_enabled: boolean
   default_markup_percentage: number
   default_due_date_days: number
   default_invoice_note: string | null

@@ -12,7 +12,8 @@
       "Bash(git commit:*)",
       "Bash(supabase:*)",
       "Bash(npm install:*)",
-      "Bash(scoop:*)"
+      "Bash(scoop:*)",
+      "WebFetch(domain:developer.vonage.com)"
     ],
     "deny": [],
     "ask": []
