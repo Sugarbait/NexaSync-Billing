@@ -8,7 +8,11 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nRemove mock data and add real-time dashboard features\n\n- Remove all mock data fallbacks from pages (customers, invoices, users, dashboard)\n- Add AI news ticker component with 15-minute auto-refresh\n- Add date range filtering to dashboard with quick select buttons (Today, This Month, Last Month, Last 3 Months)\n- Add auto-refresh functionality to dashboard (updates every 60 seconds)\n- Update Stripe API version to 2024-12-18.acacia\n- Add ParticleBackground component for enhanced UI\n- Add last updated timestamp display on dashboard\n- Fix dashboard flicker issue when changing filters\n- Increase logo size in header\n- Add Retell AI billing fetcher utility\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push:*)",
       "Bash(npm run build:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nFix TypeScript build errors\n\n- Fix useRef initialization in dashboard\n- Revert Stripe API version to match package requirements\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix TypeScript build errors\n\n- Fix useRef initialization in dashboard\n- Revert Stripe API version to match package requirements\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(supabase:*)",
+      "Bash(npm install:*)",
+      "Bash(scoop:*)"
     ],
     "deny": [],
     "ask": []

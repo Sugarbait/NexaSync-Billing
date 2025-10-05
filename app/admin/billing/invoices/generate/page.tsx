@@ -40,12 +40,23 @@ export default function GenerateInvoicesPage() {
   }, [])
 
   async function loadCustomers() {
-    const { data } = await supabase
-      .from('billing_customers')
-      .select('*')
-      .order('customer_name', { ascending: true })
+    try {
+      const { data, error } = await supabase
+        .from('billing_customers')
+        .select('*')
+        .order('customer_name', { ascending: true })
 
-    setCustomers(data || [])
+      if (error) {
+        console.error('Failed to load customers:', error)
+        setCustomers([])
+        return
+      }
+
+      setCustomers(data || [])
+    } catch (error) {
+      console.error('Failed to load customers:', error)
+      setCustomers([])
+    }
   }
 
   async function loadSettings() {
