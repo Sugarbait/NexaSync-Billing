@@ -4,15 +4,20 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
   helperText?: string
+  helpText?: string // Add support for helpText (alias for helperText)
 }
 
 export function Input({
   label,
   error,
   helperText,
+  helpText,
   className = '',
   ...props
 }: InputProps) {
+  // Use either helperText or helpText
+  const helper = helperText || helpText
+
   return (
     <div className="w-full">
       {label && (
@@ -29,8 +34,8 @@ export function Input({
       {error && (
         <p className="mt-1 text-sm text-red-600">{error}</p>
       )}
-      {helperText && !error && (
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{helperText}</p>
+      {helper && !error && (
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{helper}</p>
       )}
     </div>
   )

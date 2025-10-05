@@ -10,8 +10,10 @@ import { Badge } from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
 import type { BillingCustomer } from '@/lib/types/billing'
 import { formatDate } from '@/lib/utils/format'
+import { useNotification } from '@/components/ui/Notification'
 
 export default function CustomersPage() {
+  const { showNotification, showConfirm } = useNotification()
   const [customers, setCustomers] = useState<BillingCustomer[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<BillingCustomer[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,9 +29,8 @@ export default function CustomersPage() {
     voice_agent_id: '',
     sms_agent_id: '',
     retell_api_key: '',
-    twilio_account_sid: '',
-    twilio_auth_token: '',
     twilio_phone_numbers: [] as string[],
+    vonage_phone_numbers: [] as string[],
     billing_contact_name: '',
     phone_number: '',
     billing_address: '',
@@ -39,6 +40,7 @@ export default function CustomersPage() {
     notes: ''
   })
   const [phoneNumberInput, setPhoneNumberInput] = useState('')
+  const [vonagePhoneNumberInput, setVonagePhoneNumberInput] = useState('')
 
   useEffect(() => {
     loadCustomers()
@@ -90,9 +92,8 @@ export default function CustomersPage() {
       voice_agent_id: '',
       sms_agent_id: '',
       retell_api_key: '',
-      twilio_account_sid: '',
-      twilio_auth_token: '',
       twilio_phone_numbers: [],
+      vonage_phone_numbers: [],
       billing_contact_name: '',
       phone_number: '',
       billing_address: '',
@@ -102,6 +103,7 @@ export default function CustomersPage() {
       notes: ''
     })
     setPhoneNumberInput('')
+    setVonagePhoneNumberInput('')
     setShowModal(true)
   }
 
@@ -119,9 +121,8 @@ export default function CustomersPage() {
       voice_agent_id: customer.voice_agent_id || '',
       sms_agent_id: customer.sms_agent_id || '',
       retell_api_key: '', // Never pre-fill API key for security
-      twilio_account_sid: '', // Never pre-fill for security
-      twilio_auth_token: '', // Never pre-fill for security
       twilio_phone_numbers: customer.twilio_phone_numbers || [],
+      vonage_phone_numbers: customer.vonage_phone_numbers || [],
       billing_contact_name: customer.billing_contact_name || '',
       phone_number: customer.phone_number || '',
       billing_address: customer.billing_address || '',
@@ -131,6 +132,7 @@ export default function CustomersPage() {
       notes: customer.notes || ''
     })
     setPhoneNumberInput('')
+    setVonagePhoneNumberInput('')
     setShowModal(true)
   }
 
@@ -153,6 +155,25 @@ export default function CustomersPage() {
     })
   }
 
+  function addVonagePhoneNumber() {
+    if (!vonagePhoneNumberInput.trim()) return
+
+    if (!formData.vonage_phone_numbers.includes(vonagePhoneNumberInput.trim())) {
+      setFormData({
+        ...formData,
+        vonage_phone_numbers: [...formData.vonage_phone_numbers, vonagePhoneNumberInput.trim()]
+      })
+    }
+    setVonagePhoneNumberInput('')
+  }
+
+  function removeVonagePhoneNumber(phoneNumber: string) {
+    setFormData({
+      ...formData,
+      vonage_phone_numbers: formData.vonage_phone_numbers.filter(num => num !== phoneNumber)
+    })
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
@@ -165,6 +186,7 @@ export default function CustomersPage() {
         voice_agent_id: formData.voice_agent_id,
         sms_agent_id: formData.sms_agent_id,
         twilio_phone_numbers: formData.twilio_phone_numbers,
+        vonage_phone_numbers: formData.vonage_phone_numbers,
         billing_contact_name: formData.billing_contact_name,
         phone_number: formData.phone_number,
         billing_address: formData.billing_address,
@@ -181,16 +203,6 @@ export default function CustomersPage() {
         saveData.retell_api_key_encrypted = formData.retell_api_key
       }
 
-      // Only include Twilio credentials if entered
-      if (formData.twilio_account_sid.trim()) {
-        // TODO: Encrypt before saving
-        saveData.twilio_account_sid_encrypted = formData.twilio_account_sid
-      }
-      if (formData.twilio_auth_token.trim()) {
-        // TODO: Encrypt before saving
-        saveData.twilio_auth_token_encrypted = formData.twilio_auth_token
-      }
-
       if (editingCustomer) {
         // Update existing customer
         const { error } = await supabase
@@ -199,7 +211,7 @@ export default function CustomersPage() {
           .eq('id', editingCustomer.id)
 
         if (error) throw error
-        alert('Customer updated successfully')
+        showNotification('Customer updated successfully', 'success')
       } else {
         // Create new customer
         const { error } = await supabase
@@ -207,72 +219,71 @@ export default function CustomersPage() {
           .insert([saveData])
 
         if (error) throw error
-        alert('Customer created successfully')
+        showNotification('Customer created successfully', 'success')
       }
 
       setShowModal(false)
       loadCustomers()
     } catch (error) {
       console.error('Failed to save customer:', error)
-      alert('Failed to save customer')
+      showNotification('Failed to save customer', 'error')
     }
   }
 
   async function handleDelete(customer: BillingCustomer) {
-    if (!confirm(`Are you sure you want to delete ${customer.customer_name}?`)) {
-      return
-    }
+    showConfirm(`Are you sure you want to delete ${customer.customer_name}?`, async () => {
+      try {
+        const { error } = await supabase
+          .from('billing_customers')
+          .delete()
+          .eq('id', customer.id)
 
-    try {
-      const { error } = await supabase
-        .from('billing_customers')
-        .delete()
-        .eq('id', customer.id)
-
-      if (error) throw error
-      alert('Customer deleted successfully')
-      loadCustomers()
-    } catch (error) {
-      console.error('Failed to delete customer:', error)
-      alert('Failed to delete customer. They may have associated invoices.')
-    }
+        if (error) throw error
+        showNotification('Customer deleted successfully', 'success')
+        loadCustomers()
+      } catch (error) {
+        console.error('Failed to delete customer:', error)
+        showNotification('Failed to delete customer. They may have associated invoices.', 'error')
+      }
+    })
   }
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-6 lg:p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
-          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-6 md:h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2 md:w-1/4 mb-6 md:mb-8"></div>
+          <div className="h-64 md:h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 md:p-6 lg:p-8">
+      <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black gradient-text">Customer Management</h1>
-          <p className="text-gray-600 mt-2">Manage billing customers and their settings</p>
+          <h1 className="text-2xl md:text-3xl font-black gradient-text">Customer Management</h1>
+          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 md:mt-2">Manage billing customers and their settings</p>
         </div>
-        <Button onClick={openAddModal}>
+        <Button onClick={openAddModal} size="sm" className="md:text-base md:px-6 md:py-3">
           <Plus className="w-4 h-4 mr-2" />
-          Add Customer
+          <span className="hidden sm:inline">Add Customer</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Customers ({filteredCustomers.length})</CardTitle>
-            <div className="flex items-center gap-4">
-              <div className="relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <CardTitle className="text-base md:text-lg">Customers ({filteredCustomers.length})</CardTitle>
+            <div className="w-full sm:w-auto flex items-center gap-4">
+              <div className="relative flex-1 sm:flex-none sm:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   type="text"
                   placeholder="Search customers..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -281,23 +292,23 @@ export default function CustomersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 md:mx-0">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Customer Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Stripe Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Markup</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Auto-Invoice</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Created</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Customer Name</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Email</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Stripe Status</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Markup</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Auto-Invoice</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Created</th>
+                  <th className="text-right py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <td colSpan={7} className="text-center py-6 md:py-8 text-gray-500 dark:text-gray-400 text-sm">
                       {searchQuery ? 'No customers found matching your search' : 'No customers yet. Add your first customer to get started.'}
                     </td>
                   </tr>
@@ -308,32 +319,32 @@ export default function CustomersPage() {
                       className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                       onClick={() => viewDetails(customer)}
                     >
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-gray-100">{customer.customer_name}</td>
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{customer.customer_email}</td>
-                      <td className="py-3 px-4 text-sm">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-900 dark:text-gray-100">{customer.customer_name}</td>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-900 dark:text-gray-100">{customer.customer_email}</td>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm">
                         {customer.stripe_customer_id ? (
                           <Badge color="green">Connected</Badge>
                         ) : (
                           <Badge color="gray">Not Connected</Badge>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{customer.markup_percentage || 0}%</td>
-                      <td className="py-3 px-4 text-sm">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-900 dark:text-gray-100">{customer.markup_percentage || 0}%</td>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm">
                         {customer.auto_invoice_enabled ? (
                           <Badge color="blue">Enabled</Badge>
                         ) : (
                           <Badge color="gray">Disabled</Badge>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{formatDate(customer.created_at)}</td>
-                      <td className="py-3 px-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-900 dark:text-gray-100">{formatDate(customer.created_at)}</td>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               openEditModal(customer)
                             }}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
@@ -465,30 +476,35 @@ export default function CustomersPage() {
               </div>
             </div>
 
-            {/* Twilio API Configuration */}
+            {/* Twilio Phone Numbers */}
             <div>
-              <h3 className="text-lg font-black gradient-text mb-3">Twilio API Configuration</h3>
+              <h3 className="text-lg font-black gradient-text mb-3">Twilio Phone Numbers</h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Account SID</p>
-                    <p className="text-sm text-gray-900 dark:text-gray-100">
-                      {selectedCustomer.twilio_account_sid_encrypted ? '••••••••••••' : 'Not configured'}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Auth Token</p>
-                    <p className="text-sm text-gray-900 dark:text-gray-100">
-                      {selectedCustomer.twilio_auth_token_encrypted ? '••••••••••••' : 'Not configured'}
-                    </p>
-                  </div>
-                </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Phone Numbers to Track ({selectedCustomer.twilio_phone_numbers?.length || 0})</p>
                   {selectedCustomer.twilio_phone_numbers && selectedCustomer.twilio_phone_numbers.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {selectedCustomer.twilio_phone_numbers.map((phoneNum) => (
                         <Badge key={phoneNum} color="green">{phoneNum}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No phone numbers configured</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Vonage Phone Numbers */}
+            <div>
+              <h3 className="text-lg font-black gradient-text mb-3">Vonage Phone Numbers</h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Phone Numbers to Track ({selectedCustomer.vonage_phone_numbers?.length || 0})</p>
+                  {selectedCustomer.vonage_phone_numbers && selectedCustomer.vonage_phone_numbers.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCustomer.vonage_phone_numbers.map((phoneNum) => (
+                        <Badge key={phoneNum} color="purple">{phoneNum}</Badge>
                       ))}
                     </div>
                   ) : (
@@ -603,32 +619,10 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Twilio API Configuration */}
+          {/* Twilio Phone Numbers */}
           <div>
-            <h3 className="text-lg font-black gradient-text mb-3">Twilio API Configuration</h3>
+            <h3 className="text-lg font-black gradient-text mb-3">Twilio Phone Numbers</h3>
             <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Twilio Account SID*"
-                  type="password"
-                  value={formData.twilio_account_sid}
-                  onChange={(e) => setFormData({ ...formData, twilio_account_sid: e.target.value })}
-                  placeholder="AC..."
-                  required
-                  helperText="Customer's Twilio Account SID"
-                />
-
-                <Input
-                  label="Twilio Auth Token*"
-                  type="password"
-                  value={formData.twilio_auth_token}
-                  onChange={(e) => setFormData({ ...formData, twilio_auth_token: e.target.value })}
-                  placeholder="Auth Token"
-                  required
-                  helperText="Customer's Twilio Auth Token"
-                />
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Phone Numbers to Track*
@@ -677,7 +671,59 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Vonage Phone Numbers */}
+          <div>
+            <h3 className="text-lg font-black gradient-text mb-3">Vonage Phone Numbers</h3>
+            <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Phone Numbers to Track*
+                </label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter phone number (e.g., +15551234567)"
+                      value={vonagePhoneNumberInput}
+                      onChange={(e) => setVonagePhoneNumberInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addVonagePhoneNumber()
+                        }
+                      }}
+                    />
+                    <Button type="button" onClick={addVonagePhoneNumber}>Add</Button>
+                  </div>
+                  {formData.vonage_phone_numbers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      {formData.vonage_phone_numbers.map((phoneNum) => (
+                        <div
+                          key={phoneNum}
+                          className="inline-flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded-full text-sm"
+                        >
+                          <span>{phoneNum}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeVonagePhoneNumber(phoneNum)}
+                            className="hover:text-purple-900 dark:hover:text-purple-100"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Add phone numbers to filter Vonage usage for this customer. Use E.164 format (e.g., +15551234567).
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 border-t border-gray-200 dark:border-gray-700 pt-6">
             <Input
               label="Contact Name"
               value={formData.billing_contact_name}

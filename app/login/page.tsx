@@ -1,3 +1,17 @@
+/**
+ * ⚠️ SECURITY CRITICAL FILE - DO NOT MODIFY WITHOUT AUTHORIZATION ⚠️
+ *
+ * This file contains authentication and MFA login logic.
+ * Any unauthorized changes could compromise system security.
+ *
+ * Protected Features:
+ * - MFA enforcement (lines 74-79, 132-141)
+ * - Session verification (lines 98-99, 160-161)
+ * - Bypass prevention (lines 288-294)
+ *
+ * Contact: elitesquadp@protonmail.com for authorization
+ */
+
 'use client'
 
 import React, { useState } from 'react'
@@ -14,9 +28,16 @@ export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showMFA, setShowMFA] = useState(false)
+  const [showRegister, setShowRegister] = useState(false)
   const [credentials, setCredentials] = useState({
     email: '',
     password: ''
+  })
+  const [registerData, setRegisterData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    fullName: ''
   })
   const [mfaToken, setMfaToken] = useState('')
   const [error, setError] = useState('')
@@ -27,21 +48,6 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Check for demo login
-      if (credentials.email === 'demo@nexasync.com' && credentials.password === 'demo123') {
-        // Store demo mode in localStorage
-        localStorage.setItem('demo_mode', 'true')
-        localStorage.setItem('demo_user', JSON.stringify({
-          email: 'demo@nexasync.com',
-          name: 'Demo User',
-          role: 'admin'
-        }))
-
-        // Redirect to dashboard
-        router.push('/admin/billing')
-        return
-      }
-
       // Sign in with Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: credentials.email,
@@ -68,7 +74,7 @@ export default function LoginPage() {
 
       if (!billingUser.is_active) {
         await supabase.auth.signOut()
-        throw new Error('User account is inactive')
+        throw new Error('Your account is pending approval from an administrator. Please wait for activation.')
       }
 
       // Check if MFA is required
@@ -93,6 +99,10 @@ export default function LoginPage() {
           login_successful: true,
           mfa_verified: false
         })
+
+      // Store session flag (no MFA required for this user)
+      sessionStorage.setItem('mfa_verified', 'true')
+      sessionStorage.setItem('mfa_verified_at', new Date().toISOString())
 
       // Redirect to dashboard
       router.push('/admin/billing')
@@ -152,6 +162,10 @@ export default function LoginPage() {
           mfa_verified: true
         })
 
+      // Store MFA verification flag in session
+      sessionStorage.setItem('mfa_verified', 'true')
+      sessionStorage.setItem('mfa_verified_at', new Date().toISOString())
+
       // Redirect to dashboard
       router.push('/admin/billing')
     } catch (error) {
@@ -161,34 +175,230 @@ export default function LoginPage() {
     }
   }
 
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      // Validation
+      if (registerData.password !== registerData.confirmPassword) {
+        throw new Error('Passwords do not match')
+      }
+
+      if (registerData.password.length < 8) {
+        throw new Error('Password must be at least 8 characters')
+      }
+
+      if (!registerData.fullName.trim()) {
+        throw new Error('Full name is required')
+      }
+
+      // Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: registerData.email,
+        password: registerData.password,
+        options: {
+          data: {
+            full_name: registerData.fullName
+          }
+        }
+      })
+
+      if (authError) throw authError
+      if (!authData.user) throw new Error('Registration failed')
+
+      // Create billing_users record (inactive by default - requires admin approval)
+      const { error: billingUserError } = await supabase
+        .from('billing_users')
+        .insert({
+          auth_user_id: authData.user.id,
+          email: registerData.email,
+          full_name: registerData.fullName,
+          role: 'admin',
+          is_active: false, // Requires admin approval
+          mfa_enabled: false
+        })
+
+      if (billingUserError) {
+        // If billing_users creation fails, clean up auth user
+        await supabase.auth.admin.deleteUser(authData.user.id)
+        throw billingUserError
+      }
+
+      // Sign out after registration (don't auto-login)
+      await supabase.auth.signOut()
+
+      // Show success message and redirect to login
+      setError('')
+      setShowRegister(false)
+      setRegisterData({ email: '', password: '', confirmPassword: '', fullName: '' })
+
+      // Show a success message that account needs approval
+      alert('Registration successful! Your account is pending approval from an administrator. You will be able to log in once your account is activated.')
+
+      // No auto-login - user must wait for approval
+    } catch (error) {
+      console.error('Registration error:', error)
+      setError(error instanceof Error ? error.message : 'Registration failed')
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gray-200 dark:bg-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-200 dark:bg-gray-900 flex items-start justify-center p-4 pt-8 md:pt-16">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
+        <div className="text-center mb-6 md:mb-8">
+          <div className="flex justify-center mb-3 md:mb-4">
             <Image
               src="https://nexasync.ca/images/NexaSync-White.png"
               alt="NexaSync Logo"
               width={220}
               height={60}
-              className="h-16 w-auto"
+              className="h-12 md:h-16 w-auto"
               priority
             />
           </div>
-          <h1 className="text-2xl gradient-text mb-2">Billing Admin</h1>
-          <p className="text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
+          <h1 className="text-xl md:text-2xl gradient-text mb-2">Billing Admin</h1>
+          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
             <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
-            MFA Protected • Super User Access
+            <span className="hidden sm:inline">MFA Protected • Super User Access</span>
+            <span className="sm:hidden">MFA Protected</span>
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-center">{showMFA ? 'Enter MFA Code' : 'Sign In'}</CardTitle>
+            <CardTitle className="text-center">
+              {showMFA ? 'Enter MFA Code' : showRegister ? 'Create New Account' : 'Sign In'}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {!showMFA ? (
+            {showMFA ? (
+              <form onSubmit={handleMFAVerify} className="space-y-4">
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+                  <div className="flex flex-col items-center gap-3 mb-2">
+                    <Key className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm md:text-base font-semibold text-blue-900 dark:text-blue-300 text-center">
+                      Multi-Factor Authentication Required
+                    </p>
+                  </div>
+                  <p className="text-sm text-blue-800 dark:text-blue-400 text-center">
+                    Enter the 6-digit code from your authenticator app.
+                  </p>
+                </div>
+
+                <div className="w-full">
+                  <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-1 text-center">
+                    MFA Code
+                  </label>
+                  <input
+                    type="text"
+                    value={mfaToken}
+                    onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    required
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    pattern="\d{6}"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 text-center text-2xl tracking-widest font-mono"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={async () => {
+                      // Sign out user to prevent MFA bypass
+                      await supabase.auth.signOut()
+                      setShowMFA(false)
+                      setMfaToken('')
+                      setError('')
+                    }}
+                    className="flex-1"
+                  >
+                    Back
+                  </Button>
+                  <Button type="submit" className="flex-1" loading={loading}>
+                    Verify
+                  </Button>
+                </div>
+              </form>
+            ) : showRegister ? (
+              <form onSubmit={handleRegister} className="space-y-4">
+                {error && (
+                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <Input
+                  label="Full Name"
+                  type="text"
+                  value={registerData.fullName}
+                  onChange={(e) => setRegisterData({ ...registerData, fullName: e.target.value })}
+                  placeholder="John Doe"
+                  required
+                  autoComplete="name"
+                />
+
+                <Input
+                  label="Email"
+                  type="email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                  placeholder="admin@example.com"
+                  required
+                  autoComplete="email"
+                />
+
+                <Input
+                  label="Password"
+                  type="password"
+                  value={registerData.password}
+                  onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="new-password"
+                  helpText="Minimum 8 characters"
+                />
+
+                <Input
+                  label="Confirm Password"
+                  type="password"
+                  value={registerData.confirmPassword}
+                  onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="new-password"
+                />
+
+                <Button type="submit" className="w-full" loading={loading}>
+                  Create Account
+                </Button>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRegister(false)
+                      setError('')
+                    }}
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </div>
+              </form>
+            ) : (
               <form onSubmit={handleLogin} className="space-y-4">
                 {error && (
                   <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
@@ -220,75 +430,17 @@ export default function LoginPage() {
                   Sign In
                 </Button>
 
-                {/* Demo Credentials */}
-                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg mt-4">
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
-                    🎯 Demo Login Credentials:
-                  </p>
-                  <div className="space-y-1 text-sm text-blue-800 dark:text-blue-400 font-mono">
-                    <p><strong>Email:</strong> demo@nexasync.com</p>
-                    <p><strong>Password:</strong> demo123</p>
-                  </div>
-                  <p className="text-xs text-blue-700 dark:text-blue-500 mt-2">
-                    MFA is disabled for demo account
-                  </p>
-                </div>
-
-                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg mt-4">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                    <Shield className="w-4 h-4 inline mr-2" />
-                    This system requires authorized access. Contact your administrator if you need access.
-                  </p>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleMFAVerify} className="space-y-4">
-                {error && (
-                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Key className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
-                      Multi-Factor Authentication Required
-                    </p>
-                  </div>
-                  <p className="text-sm text-blue-800 dark:text-blue-400">
-                    Enter the 6-digit code from your authenticator app.
-                  </p>
-                </div>
-
-                <Input
-                  label="MFA Code"
-                  type="text"
-                  value={mfaToken}
-                  onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  required
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  pattern="\d{6}"
-                />
-
-                <div className="flex gap-3">
-                  <Button
+                <div className="text-center pt-2">
+                  <button
                     type="button"
-                    variant="secondary"
                     onClick={() => {
-                      setShowMFA(false)
-                      setMfaToken('')
+                      setShowRegister(true)
                       setError('')
                     }}
-                    className="flex-1"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    Back
-                  </Button>
-                  <Button type="submit" className="flex-1" loading={loading}>
-                    Verify
-                  </Button>
+                    Don't have an account? Create one
+                  </button>
                 </div>
               </form>
             )}

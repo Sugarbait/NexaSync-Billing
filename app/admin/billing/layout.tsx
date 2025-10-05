@@ -1,13 +1,30 @@
+/**
+ * ⚠️ SECURITY CRITICAL FILE - DO NOT MODIFY WITHOUT AUTHORIZATION ⚠️
+ *
+ * This file enforces authentication and MFA verification for all billing routes.
+ * Any unauthorized changes could compromise system security.
+ *
+ * Protected Features:
+ * - Route-level MFA verification (lines 64-74)
+ * - Session clearing on logout (lines 86-89)
+ * - User isolation enforcement
+ *
+ * Contact: elitesquadp@protonmail.com for authorization
+ */
+
 'use client'
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { Users, FileText, Settings, Shield, LayoutDashboard, UserCircle, LogOut, ChevronDown } from 'lucide-react'
+import { Users, FileText, Settings, Shield, LayoutDashboard, UserCircle, LogOut, ChevronDown, Menu, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { BillingUser } from '@/lib/types/auth'
 import { NewsTicker } from '@/components/ui/NewsTicker'
+import { NotificationProvider } from '@/components/ui/Notification'
+import { CloudSyncProvider } from '@/components/providers/CloudSyncProvider'
+import { SyncStatusIndicator } from '@/components/ui/SyncStatusIndicator'
 
 export default function BillingLayout({
   children,
@@ -18,6 +35,7 @@ export default function BillingLayout({
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<BillingUser | null>(null)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   useEffect(() => {
     loadCurrentUser()
@@ -25,26 +43,6 @@ export default function BillingLayout({
 
   async function loadCurrentUser() {
     try {
-      // Check for demo mode
-      const demoMode = localStorage.getItem('demo_mode')
-      const demoUser = localStorage.getItem('demo_user')
-
-      if (demoMode === 'true' && demoUser) {
-        const parsedDemoUser = JSON.parse(demoUser)
-        setCurrentUser({
-          id: 'demo',
-          auth_user_id: 'demo',
-          email: parsedDemoUser.email,
-          full_name: parsedDemoUser.name,
-          role: 'super_admin',
-          mfa_enabled: false,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          last_login_at: new Date().toISOString()
-        } as BillingUser)
-        return
-      }
-
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/login')
@@ -59,6 +57,18 @@ export default function BillingLayout({
 
       if (billingUser) {
         setCurrentUser(billingUser)
+
+        // MFA verification check
+        if (billingUser.mfa_enabled) {
+          const mfaVerified = sessionStorage.getItem('mfa_verified')
+          if (mfaVerified !== 'true') {
+            // MFA is required but not verified in this session
+            await supabase.auth.signOut()
+            sessionStorage.clear()
+            router.push('/login')
+            return
+          }
+        }
       } else {
         router.push('/login')
       }
@@ -71,6 +81,7 @@ export default function BillingLayout({
   async function handleLogout() {
     try {
       await supabase.auth.signOut()
+      sessionStorage.clear()
       router.push('/login')
     } catch (error) {
       console.error('Logout error:', error)
@@ -90,11 +101,21 @@ export default function BillingLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 dark:bg-gray-900">
+    <NotificationProvider>
+      <CloudSyncProvider userId={currentUser?.id}>
+        <div className="min-h-screen bg-gray-200 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-gray-100 dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
-        <div className="px-8 py-4">
-          <div className="flex items-center justify-between gap-8">
+        <div className="px-4 md:px-8 py-4">
+          <div className="flex items-center justify-between gap-2 md:gap-8">
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="lg:hidden p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+            >
+              {showMobileMenu ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+
             <div className="flex items-center space-x-3 shrink-0">
               <Link href="/admin/billing">
                 <Image
@@ -102,18 +123,21 @@ export default function BillingLayout({
                   alt="NexaSync Logo"
                   width={220}
                   height={60}
-                  className="h-12 w-auto"
+                  className="h-8 md:h-12 w-auto"
                   priority
                 />
               </Link>
             </div>
 
-            {/* AI News Ticker - Integrated in Header */}
-            <div className="flex-1 min-w-0">
+            {/* AI News Ticker - Hidden on mobile */}
+            <div className="hidden md:flex flex-1 min-w-0">
               <NewsTicker />
             </div>
 
-            <div className="flex items-center space-x-4 shrink-0">
+            <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
+              {/* Cloud Sync Status */}
+              {currentUser && <SyncStatusIndicator />}
+
               {/* Profile Menu */}
               <div className="relative">
                 <button
@@ -176,9 +200,29 @@ export default function BillingLayout({
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-gray-100 dark:bg-gray-800 border-r border-gray-300 dark:border-gray-700 min-h-[calc(100vh-73px)]">
+      <div className="flex flex-col lg:flex-row">
+        {/* Mobile Menu Overlay */}
+        {showMobileMenu && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setShowMobileMenu(false)}
+          />
+        )}
+
+        {/* Sidebar - Desktop and Mobile Drawer */}
+        <aside className={`
+          ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+          fixed lg:static
+          inset-y-0 left-0
+          w-64
+          bg-gray-100 dark:bg-gray-800
+          border-r border-gray-300 dark:border-gray-700
+          min-h-[calc(100vh-73px)] lg:min-h-[calc(100vh-73px)]
+          transition-transform duration-300 ease-in-out
+          z-50 lg:z-0
+          overflow-y-auto
+        `}>
           <nav className="p-4 space-y-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href ||
@@ -189,6 +233,7 @@ export default function BillingLayout({
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setShowMobileMenu(false)}
                   className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
@@ -213,10 +258,12 @@ export default function BillingLayout({
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1 w-full lg:w-auto">
           {children}
         </main>
       </div>
     </div>
+      </CloudSyncProvider>
+    </NotificationProvider>
   )
 }

@@ -8,8 +8,10 @@ import { Input, Textarea, Select } from '@/components/ui/Input'
 import { supabase } from '@/lib/supabase'
 import { stripeInvoiceService } from '@/lib/services/stripeInvoiceService'
 import type { BillingSettings } from '@/lib/types/billing'
+import { useNotification } from '@/components/ui/Notification'
 
 export default function SettingsPage() {
+  const { showNotification } = useNotification()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
@@ -29,6 +31,8 @@ export default function SettingsPage() {
   const [retellApiKey, setRetellApiKey] = useState('')
   const [vonageApiKey, setVonageApiKey] = useState('')
   const [vonageApiSecret, setVonageApiSecret] = useState('')
+  const [twilioAccountSid, setTwilioAccountSid] = useState('')
+  const [twilioAuthToken, setTwilioAuthToken] = useState('')
 
   useEffect(() => {
     loadSettings()
@@ -88,6 +92,16 @@ export default function SettingsPage() {
         encryptedVonageSecret = await stripeInvoiceService.encryptApiKey(vonageApiSecret)
       }
 
+      // Encrypt Twilio API credentials if provided
+      let encryptedTwilioSid = settings.twilio_account_sid_encrypted
+      let encryptedTwilioToken = settings.twilio_auth_token_encrypted
+      if (twilioAccountSid) {
+        encryptedTwilioSid = await stripeInvoiceService.encryptApiKey(twilioAccountSid)
+      }
+      if (twilioAuthToken) {
+        encryptedTwilioToken = await stripeInvoiceService.encryptApiKey(twilioAuthToken)
+      }
+
       const settingsToSave = {
         ...settings,
         user_id: userData.user.id,
@@ -95,7 +109,9 @@ export default function SettingsPage() {
         stripe_publishable_key: stripePublishableKey,
         retell_api_key_encrypted: encryptedRetellKey,
         vonage_api_key_encrypted: encryptedVonageKey,
-        vonage_api_secret_encrypted: encryptedVonageSecret
+        vonage_api_secret_encrypted: encryptedVonageSecret,
+        twilio_account_sid_encrypted: encryptedTwilioSid,
+        twilio_auth_token_encrypted: encryptedTwilioToken
       }
 
       const { error } = await supabase
@@ -106,15 +122,17 @@ export default function SettingsPage() {
 
       if (error) throw error
 
-      alert('Settings saved successfully')
+      showNotification('Settings saved successfully', 'success')
       setStripeApiKey('') // Clear for security
       setRetellApiKey('') // Clear for security
       setVonageApiKey('') // Clear for security
       setVonageApiSecret('') // Clear for security
+      setTwilioAccountSid('') // Clear for security
+      setTwilioAuthToken('') // Clear for security
       loadSettings()
     } catch (error) {
       console.error('Failed to save settings:', error)
-      alert('Failed to save settings')
+      showNotification('Failed to save settings', 'error')
     } finally {
       setSaving(false)
     }
@@ -305,6 +323,59 @@ export default function SettingsPage() {
             <Button onClick={saveSettings} loading={saving}>
               <Save className="w-4 h-4 mr-2" />
               Save Vonage Settings
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Twilio Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Twilio API Integration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+              <p className="text-sm text-green-800 dark:text-green-300">
+                Configure Twilio for SMS and Voice services. Your API credentials are encrypted and stored securely.
+              </p>
+            </div>
+
+            <Input
+              label="Twilio Account SID"
+              type="password"
+              value={twilioAccountSid}
+              onChange={(e) => setTwilioAccountSid(e.target.value)}
+              placeholder="Enter your Twilio Account SID"
+              helperText="Your Twilio Account SID. Leave blank to keep existing SID."
+            />
+
+            <Input
+              label="Twilio Auth Token"
+              type="password"
+              value={twilioAuthToken}
+              onChange={(e) => setTwilioAuthToken(e.target.value)}
+              placeholder="Enter your Twilio Auth Token"
+              helperText="Your Twilio Auth Token. Leave blank to keep existing token."
+            />
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="twilio_enabled"
+                checked={settings.twilio_api_enabled || false}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  twilio_api_enabled: e.target.checked
+                })}
+                className="mr-2 rounded"
+              />
+              <label htmlFor="twilio_enabled" className="text-sm text-gray-600 dark:text-gray-400">
+                Enable Twilio API integration for cost tracking
+              </label>
+            </div>
+
+            <Button onClick={saveSettings} loading={saving}>
+              <Save className="w-4 h-4 mr-2" />
+              Save Twilio Settings
             </Button>
           </CardContent>
         </Card>

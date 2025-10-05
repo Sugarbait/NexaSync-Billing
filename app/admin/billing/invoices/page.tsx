@@ -12,6 +12,7 @@ import { stripeInvoiceService } from '@/lib/services/stripeInvoiceService'
 import type { InvoiceRecord } from '@/lib/types/billing'
 import { formatCAD, formatDate, convertToCSV, downloadFile } from '@/lib/utils/format'
 import Link from 'next/link'
+import { useNotification } from '@/components/ui/Notification'
 
 interface InvoiceWithCustomer extends InvoiceRecord {
   billing_customers?: {
@@ -21,6 +22,7 @@ interface InvoiceWithCustomer extends InvoiceRecord {
 }
 
 export default function InvoicesPage() {
+  const { showNotification, showConfirm } = useNotification()
   const [invoices, setInvoices] = useState<InvoiceWithCustomer[]>([])
   const [filteredInvoices, setFilteredInvoices] = useState<InvoiceWithCustomer[]>([])
   const [loading, setLoading] = useState(true)
@@ -96,51 +98,51 @@ export default function InvoicesPage() {
   }
 
   async function sendInvoice(invoice: InvoiceWithCustomer) {
-    if (!confirm(`Send invoice to ${invoice.billing_customers?.customer_name}?`)) return
+    showConfirm(`Send invoice to ${invoice.billing_customers?.customer_name}?`, async () => {
+      try {
+        if (!invoice.stripe_invoice_id) {
+          throw new Error('No Stripe invoice ID found')
+        }
 
-    try {
-      if (!invoice.stripe_invoice_id) {
-        throw new Error('No Stripe invoice ID found')
+        const result = await stripeInvoiceService.sendInvoice(invoice.stripe_invoice_id)
+        if (!result.success) throw new Error(result.error)
+
+        // Update database
+        await supabase
+          .from('invoice_records')
+          .update({
+            invoice_status: 'sent',
+            sent_at: new Date().toISOString()
+          })
+          .eq('id', invoice.id)
+
+        showNotification('Invoice sent successfully', 'success')
+        loadInvoices()
+      } catch (error) {
+        console.error('Failed to send invoice:', error)
+        showNotification(`Failed to send invoice: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
       }
-
-      const result = await stripeInvoiceService.sendInvoice(invoice.stripe_invoice_id)
-      if (!result.success) throw new Error(result.error)
-
-      // Update database
-      await supabase
-        .from('invoice_records')
-        .update({
-          invoice_status: 'sent',
-          sent_at: new Date().toISOString()
-        })
-        .eq('id', invoice.id)
-
-      alert('Invoice sent successfully')
-      loadInvoices()
-    } catch (error) {
-      console.error('Failed to send invoice:', error)
-      alert(`Failed to send invoice: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    })
   }
 
   async function markAsPaid(invoice: InvoiceWithCustomer) {
-    if (!confirm(`Mark invoice as paid for ${invoice.billing_customers?.customer_name}?`)) return
+    showConfirm(`Mark invoice as paid for ${invoice.billing_customers?.customer_name}?`, async () => {
+      try {
+        await supabase
+          .from('invoice_records')
+          .update({
+            invoice_status: 'paid',
+            paid_at: new Date().toISOString()
+          })
+          .eq('id', invoice.id)
 
-    try {
-      await supabase
-        .from('invoice_records')
-        .update({
-          invoice_status: 'paid',
-          paid_at: new Date().toISOString()
-        })
-        .eq('id', invoice.id)
-
-      alert('Invoice marked as paid')
-      loadInvoices()
-    } catch (error) {
-      console.error('Failed to mark invoice as paid:', error)
-      alert('Failed to mark invoice as paid')
-    }
+        showNotification('Invoice marked as paid', 'success')
+        loadInvoices()
+      } catch (error) {
+        console.error('Failed to mark invoice as paid:', error)
+        showNotification('Failed to mark invoice as paid', 'error')
+      }
+    })
   }
 
   function exportToCSV() {
@@ -173,41 +175,43 @@ export default function InvoicesPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-6 lg:p-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-8"></div>
-          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-6 md:h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2 md:w-1/4 mb-6 md:mb-8"></div>
+          <div className="h-64 md:h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 md:p-6 lg:p-8">
+      <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black gradient-text">Invoice History</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">View and manage all invoices</p>
+          <h1 className="text-2xl md:text-3xl font-black gradient-text">Invoice History</h1>
+          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 md:mt-2">View and manage all invoices</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/admin/billing/invoices/generate">
-            <Button>
+            <Button size="sm" className="md:text-base md:px-6 md:py-3">
               <Plus className="w-4 h-4 mr-2" />
-              Generate Invoices
+              <span className="hidden sm:inline">Generate Invoices</span>
+              <span className="sm:hidden">Generate</span>
             </Button>
           </Link>
-          <Button variant="secondary" onClick={exportToCSV}>
+          <Button variant="secondary" onClick={exportToCSV} size="sm" className="md:text-base md:px-6 md:py-3">
             <Download className="w-4 h-4 mr-2" />
-            Export CSV
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sm:hidden">Export</span>
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <CardTitle>Invoices ({filteredInvoices.length})</CardTitle>
-            <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            <CardTitle className="text-base md:text-lg">Invoices ({filteredInvoices.length})</CardTitle>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -219,13 +223,14 @@ export default function InvoicesPage() {
                   { value: 'overdue', label: 'Overdue' },
                   { value: 'cancelled', label: 'Cancelled' }
                 ]}
+                className="w-full sm:w-auto"
               />
-              <div className="relative">
+              <div className="relative flex-1 sm:flex-none sm:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                 <input
                   type="text"
                   placeholder="Search invoices..."
-                  className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -234,24 +239,24 @@ export default function InvoicesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 md:mx-0">
+            <table className="w-full min-w-[1000px]">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Invoice #</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Created</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Customer</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Period</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Usage</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Amount</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Status</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Invoice #</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Created</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Customer</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Period</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Usage</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Amount</th>
+                  <th className="text-left py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Status</th>
+                  <th className="text-right py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <td colSpan={8} className="text-center py-6 md:py-8 text-gray-500 dark:text-gray-400 text-sm">
                       {searchQuery || statusFilter !== 'all'
                         ? 'No invoices found matching your filters'
                         : 'No invoices yet. Generate your first invoice to get started.'}
@@ -264,35 +269,35 @@ export default function InvoicesPage() {
                       className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                       onClick={() => viewDetails(invoice)}
                     >
-                      <td className="py-3 px-4 text-sm font-mono text-gray-900 dark:text-gray-100">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-mono text-gray-900 dark:text-gray-100">
                         {invoice.invoice_number || invoice.stripe_invoice_id?.slice(0, 8) || 'N/A'}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">{formatDate(invoice.created_at)}</td>
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-900 dark:text-gray-100">{formatDate(invoice.created_at)}</td>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-medium text-gray-900 dark:text-gray-100">
                         {invoice.billing_customers?.customer_name || 'Unknown Customer'}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-600 dark:text-gray-400">
                         {formatDate(invoice.billing_period_start)} - {formatDate(invoice.billing_period_end)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-900 dark:text-gray-100">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm text-gray-900 dark:text-gray-100">
                         <div className="text-xs">
                           <div>{invoice.total_chats || 0} chats</div>
                           <div className="text-gray-500 dark:text-gray-400">{invoice.total_sms_segments || 0} segments</div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm font-semibold text-gray-900 dark:text-gray-100">
                         {formatCAD(Number(invoice.total_amount_cad || 0))}
                       </td>
-                      <td className="py-3 px-4 text-sm">
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm">
                         <Badge color={getStatusColor(invoice.invoice_status)}>
                           {invoice.invoice_status}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-2 md:py-3 px-3 md:px-4 text-xs md:text-sm" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => viewDetails(invoice)}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500"
                             title="View Details"
                           >
                             <Eye className="w-4 h-4" />

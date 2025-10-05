@@ -1,28 +1,52 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Shield, Trash2, Edit, Key } from 'lucide-react'
+import { UserPlus, Shield, Trash2, Edit, Key, Mail, Copy, QrCode, XCircle, CheckCircle2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { supabase } from '@/lib/supabase'
+import { mfaService } from '@/lib/services/mfaService'
 import type { BillingUser } from '@/lib/types/auth'
+import { useNotification } from '@/components/ui/Notification'
+import { updateUserPassword } from './actions'
 
 export default function UsersPage() {
+  const { showNotification, showConfirm } = useNotification()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<BillingUser[]>([])
   const [showModal, setShowModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showMfaSetupModal, setShowMfaSetupModal] = useState(false)
+  const [mfaSetupStep, setMfaSetupStep] = useState<'qrcode' | 'verify' | 'backup'>('qrcode')
+  const [mfaSetupUser, setMfaSetupUser] = useState<BillingUser | null>(null)
+  const [mfaData, setMfaData] = useState({ secret: '', qrCode: '', backupCodes: [] as string[] })
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationError, setVerificationError] = useState('')
+  const [inviteUrl, setInviteUrl] = useState('')
   const [selectedUser, setSelectedUser] = useState<BillingUser | null>(null)
   const [editingUser, setEditingUser] = useState<BillingUser | null>(null)
   const [formData, setFormData] = useState({
     email: '',
     full_name: '',
     password: '',
+    confirmPassword: '',
     role: 'admin' as 'super_admin' | 'admin',
     mfa_enabled: false
+  })
+  const [passwordsMatch, setPasswordsMatch] = useState(true)
+  const [inviteData, setInviteData] = useState({
+    email: '',
+    role: 'admin' as 'super_admin' | 'admin'
+  })
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordChangeUser, setPasswordChangeUser] = useState<BillingUser | null>(null)
+  const [passwordChangeData, setPasswordChangeData] = useState({
+    newPassword: '',
+    confirmNewPassword: ''
   })
 
   useEffect(() => {
@@ -50,9 +74,21 @@ export default function UsersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
+    // Validate passwords match
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showNotification('Passwords do not match', 'error')
+      return
+    }
+
+    // Validate password length if provided
+    if (formData.password && formData.password.length < 8) {
+      showNotification('Password must be at least 8 characters', 'error')
+      return
+    }
+
     try {
       if (editingUser) {
-        // Update existing user
+        // Update existing user in billing_users
         const { error } = await supabase
           .from('billing_users')
           .update({
@@ -64,7 +100,18 @@ export default function UsersPage() {
           .eq('id', editingUser.id)
 
         if (error) throw error
-        alert('User updated successfully')
+
+        // Update password if provided
+        if (formData.password) {
+          const result = await updateUserPassword(editingUser.auth_user_id, formData.password)
+
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to update password')
+          }
+          showNotification('User and password updated successfully', 'success')
+        } else {
+          showNotification('User updated successfully', 'success')
+        }
       } else {
         // Create new user in Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -90,13 +137,29 @@ export default function UsersPage() {
               email: formData.email,
               full_name: formData.full_name,
               role: formData.role,
-              mfa_enabled: formData.mfa_enabled,
+              mfa_enabled: false, // Will be set to true when MFA setup completes
               is_active: true,
               created_by: userData.user?.id
             })
 
           if (userError) throw userError
-          alert('User created successfully. They will receive an email to confirm their account.')
+
+          // If MFA is enabled, show MFA setup modal
+          if (formData.mfa_enabled && authData.user) {
+            const { data: createdUser } = await supabase
+              .from('billing_users')
+              .select('*')
+              .eq('auth_user_id', authData.user.id)
+              .single()
+
+            if (createdUser) {
+              closeModal()
+              await setupMfaForUser(createdUser)
+              return
+            }
+          }
+
+          showNotification('User created successfully. They will receive an email to confirm their account.', 'success')
         }
       }
 
@@ -104,27 +167,42 @@ export default function UsersPage() {
       loadUsers()
     } catch (error) {
       console.error('Failed to save user:', error)
-      alert('Failed to save user: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      showNotification('Failed to save user: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error')
     }
   }
 
   async function handleDelete(user: BillingUser) {
-    if (!confirm(`Are you sure you want to delete ${user.full_name}?`)) return
+    showConfirm(`Are you sure you want to permanently delete ${user.full_name}? This action cannot be undone.`, async () => {
+      try {
+        // First, delete from Supabase Auth if auth_user_id exists
+        if (user.auth_user_id) {
+          try {
+            // Try to delete from auth.users using the admin API
+            // Note: This requires service role key, so we'll handle gracefully if it fails
+            const { data: { user: authUser } } = await supabase.auth.getUser()
 
-    try {
-      // Deactivate user instead of deleting
-      const { error } = await supabase
-        .from('billing_users')
-        .update({ is_active: false })
-        .eq('id', user.id)
+            // We can't delete auth users with anon key, so we'll just delete from billing_users
+            console.log('Note: Auth user cannot be deleted with current permissions. Only removing from billing_users.')
+          } catch (authError) {
+            console.log('Auth deletion skipped:', authError)
+          }
+        }
 
-      if (error) throw error
-      alert('User deactivated successfully')
-      loadUsers()
-    } catch (error) {
-      console.error('Failed to delete user:', error)
-      alert('Failed to delete user')
-    }
+        // Delete from billing_users table
+        const { error } = await supabase
+          .from('billing_users')
+          .delete()
+          .eq('id', user.id)
+
+        if (error) throw error
+
+        showNotification('User deleted successfully', 'success')
+        loadUsers()
+      } catch (error) {
+        console.error('Failed to delete user:', error)
+        showNotification('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error')
+      }
+    })
   }
 
   async function handleToggleActive(user: BillingUser) {
@@ -142,30 +220,82 @@ export default function UsersPage() {
   }
 
   async function handleToggleMFA(user: BillingUser) {
-    const action = user.mfa_enabled ? 'disable' : 'enable'
-    if (!confirm(`Are you sure you want to ${action} MFA for ${user.full_name}?`)) return
+    if (user.mfa_enabled) {
+      // Disabling MFA
+      showConfirm(`Are you sure you want to disable MFA for ${user.full_name}?`, async () => {
+        try {
+          const { error } = await supabase
+            .from('billing_users')
+            .update({
+              mfa_enabled: false,
+              mfa_secret: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id)
+
+          if (error) throw error
+          showNotification('MFA disabled successfully', 'success')
+
+          // Update selectedUser if detail modal is open
+          if (selectedUser?.id === user.id) {
+            setSelectedUser({ ...user, mfa_enabled: false })
+          }
+
+          loadUsers()
+        } catch (error) {
+          console.error('Failed to disable MFA:', error)
+          showNotification('Failed to disable MFA', 'error')
+        }
+      })
+    } else {
+      // Enabling MFA - trigger setup flow
+      setShowDetailModal(false) // Close detail modal first
+      await setupMfaForUser(user)
+    }
+  }
+
+  function openPasswordChangeModal(user: BillingUser) {
+    setPasswordChangeUser(user)
+    setPasswordChangeData({
+      newPassword: '',
+      confirmNewPassword: ''
+    })
+    setShowPasswordModal(true)
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault()
+
+    if (!passwordChangeUser) return
+
+    if (passwordChangeData.newPassword !== passwordChangeData.confirmNewPassword) {
+      showNotification('Passwords do not match', 'error')
+      return
+    }
+
+    if (passwordChangeData.newPassword.length < 8) {
+      showNotification('Password must be at least 8 characters', 'error')
+      return
+    }
 
     try {
-      const { error } = await supabase
-        .from('billing_users')
-        .update({
-          mfa_enabled: !user.mfa_enabled,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
+      // Use server action to update user password
+      const result = await updateUserPassword(
+        passwordChangeUser.auth_user_id,
+        passwordChangeData.newPassword
+      )
 
-      if (error) throw error
-      alert(`MFA ${action}d successfully`)
-
-      // Update selectedUser if detail modal is open
-      if (selectedUser?.id === user.id) {
-        setSelectedUser({ ...user, mfa_enabled: !user.mfa_enabled })
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update password')
       }
 
-      loadUsers()
+      showNotification(`Password updated successfully for ${passwordChangeUser.full_name}`, 'success')
+      setShowPasswordModal(false)
+      setPasswordChangeUser(null)
+      setPasswordChangeData({ newPassword: '', confirmNewPassword: '' })
     } catch (error) {
-      console.error('Failed to toggle MFA:', error)
-      alert(`Failed to ${action} MFA`)
+      console.error('Failed to change password:', error)
+      showNotification(error instanceof Error ? error.message : 'Failed to change password', 'error')
     }
   }
 
@@ -175,9 +305,11 @@ export default function UsersPage() {
       email: '',
       full_name: '',
       password: '',
+      confirmPassword: '',
       role: 'admin',
       mfa_enabled: false
     })
+    setPasswordsMatch(true)
     setShowModal(true)
   }
 
@@ -203,6 +335,139 @@ export default function UsersPage() {
     setEditingUser(null)
   }
 
+  function openInviteModal() {
+    setInviteData({ email: '', role: 'admin' })
+    setInviteUrl('')
+    setShowInviteModal(true)
+  }
+
+  function closeInviteModal() {
+    setShowInviteModal(false)
+    setInviteData({ email: '', role: 'admin' })
+    setInviteUrl('')
+  }
+
+  async function setupMfaForUser(user: BillingUser) {
+    try {
+      // Generate MFA secret and QR code
+      const secret = mfaService.generateSecret()
+      const qrCode = await mfaService.generateQRCode(user.email, secret)
+      const backupCodes = mfaService.generateBackupCodes()
+
+      setMfaData({ secret, qrCode, backupCodes })
+      setMfaSetupUser(user)
+      setShowMfaSetupModal(true)
+    } catch (error) {
+      console.error('Failed to generate MFA setup:', error)
+      showNotification('Failed to generate MFA setup', 'error')
+    }
+  }
+
+  async function saveMfaSetup() {
+    if (!mfaSetupUser) return
+
+    try {
+      // Encrypt and save the secret
+      const encryptedSecret = mfaService.encryptSecret(mfaData.secret)
+
+      const { error } = await supabase
+        .from('billing_users')
+        .update({
+          mfa_enabled: true,
+          mfa_secret: encryptedSecret,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', mfaSetupUser.id)
+
+      if (error) throw error
+
+      showNotification('MFA setup completed successfully! User can now use their authenticator app to log in.', 'success')
+      setShowMfaSetupModal(false)
+      setMfaSetupUser(null)
+      loadUsers()
+    } catch (error) {
+      console.error('Failed to save MFA setup:', error)
+      showNotification('Failed to save MFA setup', 'error')
+    }
+  }
+
+  function closeMfaSetupModal() {
+    setShowMfaSetupModal(false)
+    setMfaSetupStep('qrcode')
+    setMfaSetupUser(null)
+    setMfaData({ secret: '', qrCode: '', backupCodes: [] })
+    setVerificationCode('')
+    setVerificationError('')
+  }
+
+  function handleVerifyCode() {
+    setVerificationError('')
+
+    if (verificationCode.length !== 6) {
+      setVerificationError('Please enter a 6-digit code')
+      return
+    }
+
+    // Verify the token using mfaService
+    const isValid = mfaService.verifyToken(verificationCode, mfaData.secret)
+
+    if (!isValid) {
+      setVerificationError('Invalid verification code. Please try again.')
+      return
+    }
+
+    // Code is valid, proceed to backup codes
+    setVerificationCode('')
+    setMfaSetupStep('backup')
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      showNotification('Copied to clipboard!', 'success')
+    } catch (error) {
+      showNotification('Failed to copy', 'error')
+    }
+  }
+
+  async function handleSendInvite(e: React.FormEvent) {
+    e.preventDefault()
+
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) throw new Error('Not authenticated')
+
+      const response = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteData.email,
+          role: inviteData.role,
+          invitedBy: userData.user.id
+        })
+      })
+
+      const result = await response.json()
+
+      if (!result.success) throw new Error(result.error)
+
+      setInviteUrl(result.inviteUrl)
+      showNotification('Invite created successfully! Share the link below.', 'success')
+    } catch (error) {
+      console.error('Failed to send invite:', error)
+      showNotification('Failed to send invite: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error')
+    }
+  }
+
+  async function copyInviteUrl() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      showNotification('Invite link copied to clipboard!', 'success')
+    } catch (error) {
+      showNotification('Failed to copy link', 'error')
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -221,10 +486,16 @@ export default function UsersPage() {
           <h1 className="text-3xl font-black gradient-text">User Management</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Manage system users and permissions</p>
         </div>
-        <Button onClick={openAddModal}>
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add User
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={openInviteModal} variant="secondary">
+            <Mail className="w-4 h-4 mr-2" />
+            Invite User
+          </Button>
+          <Button onClick={openAddModal}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -394,6 +665,21 @@ export default function UsersPage() {
                     {selectedUser.mfa_enabled ? 'Disable MFA' : 'Enable MFA'}
                   </Button>
                 </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Password</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      Change the user's password
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => openPasswordChangeModal(selectedUser)}
+                  >
+                    <Key className="w-4 h-4 mr-2" />
+                    Change Password
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">MFA Status</p>
@@ -480,16 +766,57 @@ export default function UsersPage() {
             required
           />
 
-          {!editingUser && (
-            <Input
-              label="Password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              helperText="Minimum 8 characters"
-              required
-            />
+          {editingUser && (
+            <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-3 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                <strong>Change Password:</strong> Leave password fields blank to keep the current password. Enter a new password to update it.
+              </p>
+            </div>
           )}
+
+          <Input
+            label="Password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => {
+              const newPassword = e.target.value
+              setFormData({ ...formData, password: newPassword })
+              // Check if passwords match in real-time
+              setPasswordsMatch(newPassword === formData.confirmPassword || formData.confirmPassword === '')
+            }}
+            helpText={editingUser ? "Leave blank to keep current password (minimum 8 characters if changing)" : "Minimum 8 characters"}
+            required={!editingUser}
+          />
+
+          <div className="relative">
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={(e) => {
+                const newConfirm = e.target.value
+                setFormData({ ...formData, confirmPassword: newConfirm })
+                // Check if passwords match in real-time
+                setPasswordsMatch(formData.password === newConfirm || newConfirm === '')
+              }}
+              required={!editingUser}
+            />
+            {formData.confirmPassword && (
+              <div className="absolute right-3 top-9 pointer-events-none">
+                {passwordsMatch ? (
+                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-xs font-medium">Match</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded">
+                    <XCircle className="w-4 h-4" />
+                    <span className="text-xs font-medium">Don't match</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Role</label>
@@ -533,6 +860,315 @@ export default function UsersPage() {
             </Button>
             <Button type="submit">
               {editingUser ? 'Update User' : 'Create User'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Invite User Modal */}
+      <Modal
+        isOpen={showInviteModal}
+        onClose={closeInviteModal}
+        title="Invite User"
+      >
+        <form onSubmit={handleSendInvite} className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              Generate an invitation link that can be shared with the new user to sign up.
+            </p>
+          </div>
+
+          <Input
+            label="Email"
+            type="email"
+            value={inviteData.email}
+            onChange={(e) => setInviteData({ ...inviteData, email: e.target.value })}
+            required
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Role</label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={inviteData.role === 'admin'}
+                  onChange={() => setInviteData({ ...inviteData, role: 'admin' })}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Admin (Can manage billing data)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={inviteData.role === 'super_admin'}
+                  onChange={() => setInviteData({ ...inviteData, role: 'super_admin' })}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">Super Admin (Full access + user management)</span>
+              </label>
+            </div>
+          </div>
+
+          {inviteUrl && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+              <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">Invitation Link Generated!</p>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={inviteUrl}
+                  readOnly
+                  className="flex-1 px-3 py-2 bg-white dark:bg-gray-700 border border-green-300 dark:border-green-700 rounded text-sm"
+                />
+                <Button type="button" variant="secondary" onClick={copyInviteUrl}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-400 mt-2">
+                Share this link with the user. It expires in 7 days.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-4 pt-4">
+            <Button type="button" variant="secondary" onClick={closeInviteModal}>
+              {inviteUrl ? 'Close' : 'Cancel'}
+            </Button>
+            {!inviteUrl && (
+              <Button type="submit">
+                <Mail className="w-4 h-4 mr-2" />
+                Generate Invite Link
+              </Button>
+            )}
+          </div>
+        </form>
+      </Modal>
+
+      {/* MFA Setup Modal */}
+      <Modal
+        isOpen={showMfaSetupModal}
+        onClose={closeMfaSetupModal}
+        title={`Set Up MFA for ${mfaSetupUser?.full_name}`}
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Page 1: QR Code and Manual Key */}
+          {mfaSetupStep === 'qrcode' && (
+            <>
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong>Step 1 of 3:</strong> Show this QR code to the user so they can scan it with their authenticator app (Google Authenticator, Authy, etc.).
+                </p>
+              </div>
+
+              {/* QR Code */}
+              <div className="text-center">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                  Scan QR Code
+                </h3>
+                {mfaData.qrCode ? (
+                  <div className="flex justify-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <img src={mfaData.qrCode} alt="MFA QR Code" className="w-64 h-64" />
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                      QR code is generating...
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Manual Entry Key */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Manual Setup Key</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  If the user can't scan the QR code, they can enter this key manually:
+                </p>
+                <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                  <code className="flex-1 text-sm font-mono text-gray-900 dark:text-gray-100">
+                    {mfaService.formatSecretForDisplay(mfaData.secret)}
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard(mfaData.secret)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <Button variant="secondary" onClick={closeMfaSetupModal}>
+                  Cancel
+                </Button>
+                <Button onClick={() => setMfaSetupStep('verify')}>
+                  Next: Verify Setup
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Page 2: Verify Code */}
+          {mfaSetupStep === 'verify' && (
+            <>
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong>Step 2 of 3:</strong> Enter the 6-digit code from your authenticator app to verify the setup.
+                </p>
+              </div>
+
+              <div className="text-center space-y-4">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                  Verify Authenticator Code
+                </h3>
+
+                {verificationError && (
+                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
+                    {verificationError}
+                  </div>
+                )}
+
+                <div className="max-w-xs mx-auto">
+                  <Input
+                    label="6-Digit Code"
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    maxLength={6}
+                  />
+                </div>
+
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Open your authenticator app and enter the 6-digit code shown for this account.
+                </p>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <Button variant="secondary" onClick={() => setMfaSetupStep('qrcode')}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleVerifyCode}
+                  disabled={verificationCode.length !== 6}
+                >
+                  Verify and Continue
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Page 3: Backup Codes */}
+          {mfaSetupStep === 'backup' && (
+            <>
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong>Step 3 of 3:</strong> Save these backup codes in a secure location. The user will need them if they lose access to their authenticator app.
+                </p>
+              </div>
+
+              {/* Backup Codes */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900 dark:text-gray-100">Backup Recovery Codes</h4>
+                  <button
+                    onClick={() => copyToClipboard(mfaData.backupCodes.join('\n'))}
+                    className="flex items-center gap-2 px-3 py-1 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy All
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  Each code can only be used once. Store them in a password manager or safe location.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {mfaData.backupCodes.map((code, index) => (
+                    <div
+                      key={index}
+                      className="p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-sm text-center text-gray-900 dark:text-gray-100"
+                    >
+                      {code}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                  <strong>Important:</strong> Make sure the user has successfully added the authenticator and saved these backup codes before completing setup.
+                </p>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <Button variant="secondary" onClick={() => setMfaSetupStep('verify')}>
+                  Back
+                </Button>
+                <Button onClick={saveMfaSetup}>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Complete MFA Setup
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Password Change Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => {
+          setShowPasswordModal(false)
+          setPasswordChangeUser(null)
+          setPasswordChangeData({ newPassword: '', confirmNewPassword: '' })
+        }}
+        title={`Change Password for ${passwordChangeUser?.full_name}`}
+      >
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-300">
+              Enter a new password for this user. The password must be at least 8 characters long.
+            </p>
+          </div>
+
+          <Input
+            label="New Password"
+            type="password"
+            value={passwordChangeData.newPassword}
+            onChange={(e) => setPasswordChangeData({ ...passwordChangeData, newPassword: e.target.value })}
+            placeholder="••••••••"
+            required
+            autoComplete="new-password"
+            helpText="Minimum 8 characters"
+          />
+
+          <Input
+            label="Confirm New Password"
+            type="password"
+            value={passwordChangeData.confirmNewPassword}
+            onChange={(e) => setPasswordChangeData({ ...passwordChangeData, confirmNewPassword: e.target.value })}
+            placeholder="••••••••"
+            required
+            autoComplete="new-password"
+          />
+
+          <div className="flex gap-4 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowPasswordModal(false)
+                setPasswordChangeUser(null)
+                setPasswordChangeData({ newPassword: '', confirmNewPassword: '' })
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1">
+              Update Password
             </Button>
           </div>
         </form>
