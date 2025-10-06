@@ -2,6 +2,21 @@
 
 This file provides architectural context and development guidance for the NexaSync Billing administration platform.
 
+## ⚠️ AUTHORIZATION REQUIRED
+
+**IMPORTANT: All code modifications, file edits, and structural changes to this codebase require explicit user authorization before implementation.**
+
+Before making any changes:
+1. Present proposed changes to the user
+2. Wait for explicit approval
+3. Only proceed after receiving confirmation
+
+**Exceptions (allowed without prior approval):**
+- Reading files for analysis
+- Searching the codebase
+- Answering questions about existing code
+- Running diagnostic commands (git status, npm scripts for info gathering)
+
 ## Common Commands
 
 ```bash
