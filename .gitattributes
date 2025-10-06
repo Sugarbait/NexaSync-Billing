@@ -1,0 +1,15 @@
+# Security-Critical Files - Require Authorization for Changes
+# Contact: elitesquadp@protonmail.com
+
+# Authentication & MFA
+app/login/page.tsx                    diff=security-critical
+app/admin/billing/layout.tsx          diff=security-critical
+lib/services/mfaService.ts            diff=security-critical
+
+# Database Security
+*.sql                                  diff=security-critical
+
+# Environment Files (never commit)
+.env                                   -diff
+.env.local                            -diff
+.env.*.local                          -diff

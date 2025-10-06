@@ -11,11 +11,13 @@ import { Badge } from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
 import { mfaService } from '@/lib/services/mfaService'
 import type { BillingUser } from '@/lib/types/auth'
+import { useNotification } from '@/components/ui/Notification'
 
 export default function MFASetupPage() {
   const router = useRouter()
+  const { showNotification, showConfirm } = useNotification()
   const [loading, setLoading] = useState(true)
-  const [step, setStep] = useState<'generate' | 'verify' | 'complete'>('generate')
+  const [step, setStep] = useState<'setup' | 'verify' | 'backup-codes' | 'complete'>('setup')
   const [currentUser, setCurrentUser] = useState<BillingUser | null>(null)
   const [mfaData, setMfaData] = useState({
     secret: '',
@@ -26,10 +28,10 @@ export default function MFASetupPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    loadUser()
+    loadUserAndGenerateSecret()
   }, [])
 
-  async function loadUser() {
+  async function loadUserAndGenerateSecret() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
@@ -46,30 +48,31 @@ export default function MFASetupPage() {
       if (billingUser) {
         setCurrentUser(billingUser)
 
-        // If MFA already enabled, skip to complete
+        // If MFA already enabled, show the complete screen
         if (billingUser.mfa_enabled && billingUser.mfa_secret) {
           setStep('complete')
+          setLoading(false)
+          return
         }
+
+        // Otherwise, automatically generate new MFA secret
+        await generateNewSecret(billingUser.email)
       }
     } catch (error) {
       console.error('Failed to load user:', error)
+      setError('Failed to load user information')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleGenerateSecret() {
+  async function generateNewSecret(email: string) {
     try {
-      if (!currentUser) throw new Error('No user loaded')
-
-      setLoading(true)
-      setError('')
-
-      // Generate new secret
+      // Generate a new secret
       const secret = mfaService.generateSecret()
 
       // Generate QR code
-      const qrCode = await mfaService.generateQRCode(currentUser.email, secret)
+      const qrCode = await mfaService.generateQRCode(email, secret)
 
       // Generate backup codes
       const backupCodes = mfaService.generateBackupCodes()
@@ -80,14 +83,13 @@ export default function MFASetupPage() {
         backupCodes
       })
 
-      setStep('verify')
+      console.log('✅ MFA secret and QR code generated successfully')
     } catch (error) {
-      console.error('Failed to generate MFA secret:', error)
-      setError('Failed to generate MFA secret')
-    } finally {
-      setLoading(false)
+      console.error('❌ Failed to generate MFA secret:', error)
+      setError('Failed to generate MFA secret. Please try again.')
     }
   }
+
 
   async function handleVerifyAndEnable() {
     try {
@@ -117,7 +119,7 @@ export default function MFASetupPage() {
 
       if (updateError) throw updateError
 
-      setStep('complete')
+      setStep('backup-codes')
     } catch (error) {
       console.error('Failed to enable MFA:', error)
       setError(error instanceof Error ? error.message : 'Failed to enable MFA')
@@ -127,41 +129,39 @@ export default function MFASetupPage() {
   }
 
   async function handleDisableMFA() {
-    if (!confirm('Are you sure you want to disable MFA? This will make your account less secure.')) {
-      return
-    }
+    showConfirm('Are you sure you want to disable MFA? This will make your account less secure.', async () => {
+      try {
+        if (!currentUser) throw new Error('No user loaded')
 
-    try {
-      if (!currentUser) throw new Error('No user loaded')
+        setLoading(true)
 
-      setLoading(true)
+        const { error } = await supabase
+          .from('billing_users')
+          .update({
+            mfa_enabled: false,
+            mfa_secret: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentUser.id)
 
-      const { error } = await supabase
-        .from('billing_users')
-        .update({
-          mfa_enabled: false,
-          mfa_secret: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentUser.id)
+        if (error) throw error
 
-      if (error) throw error
-
-      router.push('/admin/billing/profile')
-    } catch (error) {
-      console.error('Failed to disable MFA:', error)
-      alert('Failed to disable MFA')
-    } finally {
-      setLoading(false)
-    }
+        router.push('/admin/billing/profile')
+      } catch (error) {
+        console.error('Failed to disable MFA:', error)
+        showNotification('Failed to disable MFA', 'error')
+      } finally {
+        setLoading(false)
+      }
+    })
   }
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text)
-    alert('Copied to clipboard!')
+    showNotification('Copied to clipboard!', 'success')
   }
 
-  if (loading && step === 'generate') {
+  if (loading) {
     return (
       <div className="p-8">
         <div className="animate-pulse">
@@ -189,41 +189,64 @@ export default function MFASetupPage() {
       </div>
 
       <div className="max-w-2xl">
-        {step === 'generate' && (
+        {step === 'setup' && (
           <Card>
             <CardHeader>
-              <CardTitle>Enable MFA</CardTitle>
+              <CardTitle>Step 1: Scan QR Code</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">
-                      Why enable MFA?
-                    </p>
-                    <p className="text-sm text-blue-800 dark:text-blue-400">
-                      Multi-Factor Authentication adds an extra layer of security to your account. Even if someone
-                      knows your password, they won't be able to access your account without your authenticator app.
-                    </p>
-                  </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Use your authenticator app (Google Authenticator, Authy, 1Password, etc.) to scan this QR code:
+              </p>
+
+              {mfaData.qrCode ? (
+                <div className="flex justify-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <img src={mfaData.qrCode} alt="MFA QR Code" className="w-64 h-64" />
+                </div>
+              ) : (
+                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                    QR code is generating... If it doesn't appear, try refreshing the page.
+                  </p>
+                </div>
+              )}
+
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Manual Setup</h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  If you can't scan the QR code, enter this secret key manually:
+                </p>
+                <div className="flex items-center gap-2 p-3 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                  <code className="flex-1 text-sm font-mono text-gray-900 dark:text-gray-100">
+                    {mfaService.formatSecretForDisplay(mfaData.secret)}
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard(mfaData.secret)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
                 </div>
               </div>
 
-              <div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                  <strong>What you'll need:</strong>
-                </p>
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                  <li>A TOTP authenticator app (Google Authenticator, Authy, 1Password, etc.)</li>
-                  <li>Your smartphone or device with the authenticator app</li>
-                </ul>
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => router.push('/admin/billing/profile')}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => setStep('verify')}
+                  className="flex-1"
+                  disabled={!mfaData.qrCode}
+                >
+                  Next: Verify Setup
+                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+                </Button>
               </div>
-
-              <Button onClick={handleGenerateSecret} loading={loading} className="w-full">
-                <Key className="w-4 h-4 mr-2" />
-                Generate MFA Secret
-              </Button>
             </CardContent>
           </Card>
         )}
@@ -334,6 +357,57 @@ export default function MFASetupPage() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {step === 'backup-codes' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Step 3: Save Backup Codes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 p-4 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                  <strong>Important:</strong> Save these backup codes in a secure location. You can use them to access your account if you lose your authenticator device.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {mfaData.backupCodes.map((code, index) => (
+                  <div
+                    key={index}
+                    className="p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 font-mono text-sm text-center text-gray-900 dark:text-gray-100"
+                  >
+                    {code}
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={() => copyToClipboard(mfaData.backupCodes.join('\n'))}
+                className="w-full"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy All Backup Codes
+              </Button>
+
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 p-4 rounded-lg">
+                <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
+                  <li>• Each backup code can only be used once</li>
+                  <li>• Store them in a password manager or safe location</li>
+                  <li>• Don't share these codes with anyone</li>
+                </ul>
+              </div>
+
+              <Button
+                onClick={() => setStep('complete')}
+                className="w-full"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Complete MFA Setup
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {step === 'complete' && (

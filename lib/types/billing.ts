@@ -11,6 +11,7 @@ export interface BillingCustomer {
   twilio_account_sid_encrypted: string | null
   twilio_auth_token_encrypted: string | null
   twilio_phone_numbers: string[]
+  vonage_phone_numbers: string[]
   markup_percentage: number
   auto_invoice_enabled: boolean
   auto_invoice_day_of_month: number | null
@@ -39,6 +40,7 @@ export interface InvoiceRecord {
   total_call_minutes: number
   twilio_sms_cost_cad: number
   twilio_voice_cost_cad: number
+  vonage_cost_cad: number
   retell_ai_chat_cost_cad: number
   retell_ai_voice_cost_cad: number
   subtotal_cad: number

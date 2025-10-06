@@ -41,10 +41,12 @@ export default function LoginPage() {
   })
   const [mfaToken, setMfaToken] = useState('')
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setSuccessMessage('')
     setLoading(true)
 
     try {
@@ -178,6 +180,7 @@ export default function LoginPage() {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setSuccessMessage('')
     setLoading(true)
 
     try {
@@ -194,40 +197,27 @@ export default function LoginPage() {
         throw new Error('Full name is required')
       }
 
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: registerData.email,
-        password: registerData.password,
-        options: {
-          data: {
-            full_name: registerData.fullName
-          }
-        }
-      })
-
-      if (authError) throw authError
-      if (!authData.user) throw new Error('Registration failed')
-
-      // Create billing_users record (inactive by default - requires admin approval)
-      const { error: billingUserError } = await supabase
-        .from('billing_users')
-        .insert({
-          auth_user_id: authData.user.id,
+      // Create user via server-side API
+      const response = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           email: registerData.email,
+          password: registerData.password,
           full_name: registerData.fullName,
           role: 'admin',
-          is_active: false, // Requires admin approval
-          mfa_enabled: false
+          mfa_enabled: false,
+          is_active: false // Requires admin approval
         })
+      })
 
-      if (billingUserError) {
-        // If billing_users creation fails, clean up auth user
-        await supabase.auth.admin.deleteUser(authData.user.id)
-        throw billingUserError
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Registration failed')
       }
-
-      // Sign out after registration (don't auto-login)
-      await supabase.auth.signOut()
 
       // Show success message and redirect to login
       setError('')
@@ -235,7 +225,7 @@ export default function LoginPage() {
       setRegisterData({ email: '', password: '', confirmPassword: '', fullName: '' })
 
       // Show a success message that account needs approval
-      alert('Registration successful! Your account is pending approval from an administrator. You will be able to log in once your account is activated.')
+      setSuccessMessage('Registration successful! Your account is pending approval from an administrator. You will be able to log in once your account is activated.')
 
       // No auto-login - user must wait for approval
     } catch (error) {
@@ -340,6 +330,12 @@ export default function LoginPage() {
                   </div>
                 )}
 
+                {successMessage && (
+                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300 px-4 py-3 rounded-lg text-sm">
+                    {successMessage}
+                  </div>
+                )}
+
                 <Input
                   label="Full Name"
                   type="text"
@@ -391,6 +387,7 @@ export default function LoginPage() {
                     onClick={() => {
                       setShowRegister(false)
                       setError('')
+                      setSuccessMessage('')
                     }}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >
@@ -403,6 +400,12 @@ export default function LoginPage() {
                 {error && (
                   <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg text-sm">
                     {error}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300 px-4 py-3 rounded-lg text-sm">
+                    {successMessage}
                   </div>
                 )}
 
@@ -436,6 +439,7 @@ export default function LoginPage() {
                     onClick={() => {
                       setShowRegister(true)
                       setError('')
+                      setSuccessMessage('')
                     }}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                   >

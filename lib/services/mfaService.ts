@@ -1,6 +1,13 @@
 /**
+ * ⚠️ SECURITY CRITICAL FILE - DO NOT MODIFY WITHOUT AUTHORIZATION ⚠️
+ *
  * MFA Service - TOTP (Time-based One-Time Password) Implementation
  * Uses Google Authenticator compatible TOTP tokens
+ *
+ * This file contains cryptographic operations for MFA.
+ * Any unauthorized changes could compromise system security.
+ *
+ * Contact: elitesquadp@protonmail.com for authorization
  */
 
 import { authenticator } from 'otplib'

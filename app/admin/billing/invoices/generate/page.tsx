@@ -13,12 +13,14 @@ import type { BillingCustomer, InvoicePreview, InvoiceResult, BillingSettings } 
 import { formatCAD, formatDateRange, getPreviousMonthRange, getCurrentMonthRange } from '@/lib/utils/format'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useNotification } from '@/components/ui/Notification'
 
 type Step = 'date-range' | 'preview' | 'options' | 'processing' | 'results'
 type PageMode = 'manual' | 'automation'
 
 export default function GenerateInvoicesPage() {
   const router = useRouter()
+  const { showNotification } = useNotification()
   const [pageMode, setPageMode] = useState<PageMode>('manual')
   const [currentStep, setCurrentStep] = useState<Step>('date-range')
   const [dateRange, setDateRange] = useState<{ start: Date; end: Date }>(getPreviousMonthRange())
@@ -99,7 +101,7 @@ export default function GenerateInvoicesPage() {
       ))
     } catch (error) {
       console.error('Failed to update auto-invoice setting:', error)
-      alert('Failed to update auto-invoice setting')
+      showNotification('Failed to update auto-invoice setting', 'error')
     } finally {
       setSavingSettings(false)
     }
@@ -130,7 +132,7 @@ export default function GenerateInvoicesPage() {
       ))
     } catch (error) {
       console.error('Failed to update schedule:', error)
-      alert('Failed to update schedule')
+      showNotification('Failed to update schedule', 'error')
     } finally {
       setSavingSettings(false)
     }
@@ -181,7 +183,7 @@ export default function GenerateInvoicesPage() {
       setCurrentStep('preview')
     } catch (error) {
       console.error('Failed to calculate previews:', error)
-      alert('Failed to calculate invoice previews')
+      showNotification('Failed to calculate invoice previews', 'error')
     } finally {
       setLoading(false)
     }

@@ -1,0 +1,15 @@
+# Code Owners - Security-Critical Files Require Authorization
+# These files require approval from elitesquadp@protonmail.com before merging
+
+# Authentication & MFA Files
+/app/login/page.tsx                   @elitesquadp
+/app/admin/billing/layout.tsx         @elitesquadp
+/lib/services/mfaService.ts           @elitesquadp
+
+# Database Security
+*.sql                                 @elitesquadp
+
+# Security Documentation
+/SECURITY.md                          @elitesquadp
+/.gitattributes                       @elitesquadp
+/.github/CODEOWNERS                   @elitesquadp

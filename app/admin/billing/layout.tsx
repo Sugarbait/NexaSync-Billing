@@ -24,7 +24,6 @@ import type { BillingUser } from '@/lib/types/auth'
 import { NewsTicker } from '@/components/ui/NewsTicker'
 import { NotificationProvider } from '@/components/ui/Notification'
 import { CloudSyncProvider } from '@/components/providers/CloudSyncProvider'
-import { SyncStatusIndicator } from '@/components/ui/SyncStatusIndicator'
 
 export default function BillingLayout({
   children,
@@ -135,9 +134,6 @@ export default function BillingLayout({
             </div>
 
             <div className="flex items-center space-x-2 md:space-x-4 shrink-0">
-              {/* Cloud Sync Status */}
-              {currentUser && <SyncStatusIndicator />}
-
               {/* Profile Menu */}
               <div className="relative">
                 <button

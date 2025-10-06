@@ -297,24 +297,24 @@ export default function BillingDashboard() {
         </div>
 
         {/* Date Range Filter */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">From:</label>
               <input
                 type="date"
                 value={dateRange.start.toISOString().split('T')[0]}
                 onChange={(e) => setDateRange({ ...dateRange, start: new Date(e.target.value) })}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-40 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">To:</label>
               <input
                 type="date"
                 value={dateRange.end.toISOString().split('T')[0]}
                 onChange={(e) => setDateRange({ ...dateRange, end: new Date(e.target.value) })}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-40 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>

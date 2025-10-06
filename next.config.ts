@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'export',
+  distDir: 'dist',
   eslint: {
     // Only run ESLint on these directories during build
     dirs: ['app', 'components', 'lib'],
@@ -12,6 +14,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

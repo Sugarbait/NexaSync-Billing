@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS billing_customers (
   twilio_account_sid_encrypted TEXT,
   twilio_auth_token_encrypted TEXT,
   twilio_phone_numbers TEXT[] DEFAULT '{}',
+  vonage_phone_numbers TEXT[] DEFAULT '{}',
   markup_percentage DECIMAL DEFAULT 0,
   auto_invoice_enabled BOOLEAN DEFAULT false,
   auto_invoice_day_of_month INTEGER,
@@ -103,7 +104,7 @@ CREATE TABLE IF NOT EXISTS billing_settings (
 -- Create billing_users table
 CREATE TABLE IF NOT EXISTS billing_users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  auth_user_id UUID,
   email TEXT NOT NULL UNIQUE,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('super_admin', 'admin')),
@@ -176,3 +177,4 @@ COMMENT ON TABLE invoice_records IS 'Invoice records with cost breakdown';
 COMMENT ON TABLE billing_settings IS 'Global billing system settings and API keys';
 COMMENT ON TABLE billing_users IS 'Authorized users for the billing system with MFA support';
 COMMENT ON TABLE login_history IS 'Login attempt history for security auditing';
+COMMENT ON COLUMN billing_users.auth_user_id IS 'Optional reference to Supabase auth.users - stored for reference but not enforced';

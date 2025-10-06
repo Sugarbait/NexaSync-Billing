@@ -190,15 +190,17 @@ class CloudSyncService {
         .from('user_preferences')
         .select('*')
         .eq('user_id', this.userId)
-        .single()
+        .maybeSingle()
 
       // Handle specific error codes
       if (error) {
-        // PGRST116 = not found (no preferences yet)
-        if (error.code === 'PGRST116') {
-          console.log('CloudSyncService: No preferences found in cloud')
-          return { success: true, preferences: {}, message: 'No preferences found' }
-        }
+        console.error('CloudSyncService: Detailed error:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          userId: this.userId
+        })
 
         // 42P01 = table does not exist (migration not run)
         if (error.code === '42P01') {
@@ -210,6 +212,12 @@ class CloudSyncService {
         // Log other errors but don't break the app
         console.warn('CloudSyncService: Sync error (code: ' + error.code + '):', error.message)
         return { success: false, message: error.message }
+      }
+
+      // No data found (first time sync)
+      if (!data) {
+        console.log('CloudSyncService: No preferences found in cloud')
+        return { success: true, preferences: {}, message: 'No preferences found' }
       }
 
       if (data) {
@@ -255,17 +263,20 @@ class CloudSyncService {
           console.log('CloudSyncService: Real-time update received', payload)
 
           // Check if update is from another device
-          if (payload.new && payload.new.device_id !== this.deviceId) {
-            const preferences = payload.new.preferences as UserPreferences
+          if (payload.new && typeof payload.new === 'object' && 'device_id' in payload.new) {
+            const syncData = payload.new as SyncData
+            if (syncData.device_id !== this.deviceId) {
+              const preferences = syncData.preferences as UserPreferences
 
-            // Update localStorage cache (browser only)
-            if (typeof window !== 'undefined') {
-              localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
+              // Update localStorage cache (browser only)
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(`preferences_${this.userId}`, JSON.stringify(preferences))
 
-              // Dispatch event to notify components
-              window.dispatchEvent(new CustomEvent('cloudPreferencesUpdated', {
-                detail: preferences
-              }))
+                // Dispatch event to notify components
+                window.dispatchEvent(new CustomEvent('cloudPreferencesUpdated', {
+                  detail: preferences
+                }))
+              }
             }
           }
         }
@@ -337,20 +348,17 @@ class CloudSyncService {
     }
 
     try {
-      // Get current local preferences
+      // Get current local preferences or use empty object
       const localPrefs = localStorage.getItem(`preferences_${this.userId}`)
-      if (localPrefs) {
-        const preferences = JSON.parse(localPrefs) as UserPreferences
-        const result = await this.syncToCloud(preferences)
+      const preferences: UserPreferences = localPrefs ? JSON.parse(localPrefs) : {}
 
-        if (result.success) {
-          return { success: true, message: 'Preferences synced to cloud' }
-        } else {
-          return { success: false, message: result.message || 'Sync failed' }
-        }
+      const result = await this.syncToCloud(preferences)
+
+      if (result.success) {
+        return { success: true, message: 'Preferences synced to cloud' }
+      } else {
+        return { success: false, message: result.message || 'Sync failed' }
       }
-
-      return { success: false, message: 'No local preferences to sync' }
     } catch (error) {
       return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
     }

@@ -1,0 +1,140 @@
+-- ==========================================
+-- COMPREHENSIVE AUTH.USERS INVESTIGATION
+-- ==========================================
+
+-- 1. CHECK ALL TRIGGERS ON auth.users
+SELECT 
+    trigger_name,
+    event_manipulation,
+    event_object_table,
+    action_statement,
+    action_timing,
+    action_orientation
+FROM information_schema.triggers 
+WHERE event_object_schema = 'auth' 
+  AND event_object_table = 'users'
+ORDER BY trigger_name;
+
+-- 2. CHECK ALL FOREIGN KEY CONSTRAINTS ON auth.users
+SELECT
+    tc.constraint_name,
+    tc.table_schema,
+    tc.table_name,
+    kcu.column_name,
+    ccu.table_schema AS foreign_table_schema,
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name,
+    rc.update_rule,
+    rc.delete_rule
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+  AND tc.table_schema = kcu.table_schema
+JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+  AND ccu.table_schema = tc.table_schema
+LEFT JOIN information_schema.referential_constraints AS rc
+  ON tc.constraint_name = rc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = 'auth'
+  AND tc.table_name = 'users';
+
+-- 3. CHECK ALL CHECK CONSTRAINTS ON auth.users
+SELECT
+    con.conname AS constraint_name,
+    pg_get_constraintdef(con.oid) AS constraint_definition
+FROM pg_catalog.pg_constraint con
+INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+WHERE nsp.nspname = 'auth'
+  AND rel.relname = 'users'
+  AND con.contype = 'c';
+
+-- 4. CHECK ALL UNIQUE CONSTRAINTS ON auth.users
+SELECT
+    con.conname AS constraint_name,
+    pg_get_constraintdef(con.oid) AS constraint_definition
+FROM pg_catalog.pg_constraint con
+INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = connamespace
+WHERE nsp.nspname = 'auth'
+  AND rel.relname = 'users'
+  AND con.contype = 'u';
+
+-- 5. CHECK NOT NULL CONSTRAINTS ON auth.users
+SELECT
+    a.attname AS column_name,
+    t.typname AS data_type,
+    a.attnotnull AS not_null
+FROM pg_catalog.pg_attribute a
+JOIN pg_catalog.pg_type t ON a.atttypid = t.oid
+JOIN pg_catalog.pg_class c ON a.attrelid = c.oid
+JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+WHERE n.nspname = 'auth'
+  AND c.relname = 'users'
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND a.attnotnull = true
+ORDER BY a.attnum;
+
+-- 6. GET FUNCTION DEFINITION FOR auto_confirm_user
+SELECT
+    pg_get_functiondef(p.oid) AS function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+  AND p.proname = 'auto_confirm_user';
+
+-- 7. CHECK IF THERE ARE ANY OTHER BEFORE INSERT TRIGGERS
+SELECT
+    t.tgname AS trigger_name,
+    p.proname AS function_name,
+    pg_get_functiondef(p.oid) AS function_definition
+FROM pg_trigger t
+JOIN pg_class c ON t.tgrelid = c.oid
+JOIN pg_namespace n ON c.relnamespace = n.oid
+JOIN pg_proc p ON t.tgfoid = p.oid
+WHERE n.nspname = 'auth'
+  AND c.relname = 'users'
+  AND t.tgtype & 2 = 2  -- BEFORE trigger
+  AND t.tgtype & 4 = 4  -- INSERT trigger
+ORDER BY t.tgname;
+
+-- 8. CHECK RLS POLICIES ON auth.users (even though service role should bypass)
+SELECT
+    schemaname,
+    tablename,
+    policyname,
+    permissive,
+    roles,
+    cmd,
+    qual,
+    with_check
+FROM pg_policies
+WHERE schemaname = 'auth'
+  AND tablename = 'users';
+
+-- 9. CHECK TABLE OWNERSHIP AND PERMISSIONS
+SELECT
+    n.nspname AS schema_name,
+    c.relname AS table_name,
+    pg_catalog.pg_get_userbyid(c.relowner) AS owner,
+    c.relrowsecurity AS rls_enabled,
+    c.relforcerowsecurity AS rls_forced
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'auth'
+  AND c.relname = 'users';
+
+-- 10. CHECK FOR ANY RULES ON auth.users
+SELECT
+    n.nspname AS schema_name,
+    c.relname AS table_name,
+    r.rulename AS rule_name,
+    pg_get_ruledef(r.oid) AS rule_definition
+FROM pg_rewrite r
+JOIN pg_class c ON r.ev_class = c.oid
+JOIN pg_namespace n ON c.relnamespace = n.oid
+WHERE n.nspname = 'auth'
+  AND c.relname = 'users'
+  AND r.rulename != '_RETURN';

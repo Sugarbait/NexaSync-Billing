@@ -52,6 +52,48 @@ export function NewsTicker() {
             url: "#",
             source: "VentureBeat",
             publishedAt: new Date().toISOString()
+          },
+          {
+            title: "Microsoft integrates GPT-4 into Office 365 suite",
+            url: "#",
+            source: "The Verge",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "Meta AI releases Llama 3 with improved multilingual support",
+            url: "#",
+            source: "TechCrunch",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "Google Gemini Ultra surpasses GPT-4 in benchmark tests",
+            url: "#",
+            source: "VentureBeat",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "Researchers achieve breakthrough in AI safety alignment",
+            url: "#",
+            source: "MIT Technology Review",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "AI-powered drug discovery leads to new cancer treatment",
+            url: "#",
+            source: "Nature",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "OpenAI launches AI agent framework for enterprise applications",
+            url: "#",
+            source: "TechCrunch",
+            publishedAt: new Date().toISOString()
+          },
+          {
+            title: "Neural networks achieve human-level performance in medical diagnosis",
+            url: "#",
+            source: "Science Daily",
+            publishedAt: new Date().toISOString()
           }
         ])
         setLoading(false)
@@ -60,7 +102,7 @@ export function NewsTicker() {
       }
 
       const response = await fetch(
-        `https://newsapi.org/v2/everything?q=artificial+intelligence+OR+AI+OR+machine+learning+OR+ChatGPT+OR+OpenAI+OR+Claude+OR+LLM&sortBy=publishedAt&language=en&pageSize=10&apiKey=${apiKey}`
+        `https://newsapi.org/v2/everything?q=artificial+intelligence+OR+AI+OR+machine+learning+OR+ChatGPT+OR+OpenAI+OR+Claude+OR+LLM+OR+GPT+OR+neural+network+OR+deep+learning+OR+Gemini+OR+Anthropic+OR+Google+AI+OR+Microsoft+AI+OR+Meta+AI+OR+AI+model+OR+generative+AI&sortBy=publishedAt&language=en&pageSize=50&apiKey=${apiKey}`
       )
 
       const data = await response.json()
@@ -93,7 +135,7 @@ export function NewsTicker() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white overflow-hidden relative rounded-lg">
+    <div className="ticker-gradient text-white overflow-hidden relative rounded-lg">
       <div className="flex items-center gap-3 py-2 px-4">
         <div className="flex items-center gap-2 shrink-0">
           <Newspaper className="w-4 h-4" />
@@ -122,6 +164,21 @@ export function NewsTicker() {
       </div>
 
       <style jsx>{`
+        .ticker-gradient {
+          background: linear-gradient(90deg, #2563eb 0%, #7c3aed 25%, #2563eb 50%, #7c3aed 75%, #2563eb 100%);
+          background-size: 400% 100%;
+          animation: gradient-shift 15s linear infinite;
+        }
+
+        @keyframes gradient-shift {
+          0% {
+            background-position: 0% 50%;
+          }
+          100% {
+            background-position: 100% 50%;
+          }
+        }
+
         .ticker-wrapper {
           display: flex;
           overflow: hidden;

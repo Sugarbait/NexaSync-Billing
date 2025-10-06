@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { stripeInvoiceService } from '@/lib/services/stripeInvoiceService'
 import type { BillingSettings } from '@/lib/types/billing'
 import { useNotification } from '@/components/ui/Notification'
+import { SyncStatusIndicator } from '@/components/ui/SyncStatusIndicator'
 
 export default function SettingsPage() {
   const { showNotification } = useNotification()
@@ -182,6 +183,31 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Cloud Sync Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Cloud Sync</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                Your settings and preferences are automatically synchronized across devices.
+                Use the sync button below to manually sync your data or check the sync status.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Sync Status</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  Manage your cloud synchronization settings
+                </p>
+              </div>
+              <SyncStatusIndicator />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Stripe Configuration */}
         <Card>
           <CardHeader>

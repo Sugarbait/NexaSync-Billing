@@ -4,11 +4,14 @@ A comprehensive billing administration platform built with Next.js, designed for
 
 ## 🔒 Security Features
 
+> ⚠️ **IMPORTANT**: See [SECURITY.md](./SECURITY.md) for security-critical files that require authorization to modify.
+
 - **MFA Required**: Multi-factor authentication mandatory for all access
 - **Super User Only**: Access restricted to Super User role
 - **No PHI/HIPAA Data**: Handles only billing and usage data (costs, call counts, SMS segments)
 - **Row Level Security**: Database-level access control via Supabase RLS
 - **Encrypted Storage**: Stripe API keys encrypted at rest
+- **Protected Code**: Security-critical files are marked and require authorization (see [SECURITY.md](./SECURITY.md))
 
 ## ✨ Features
 
@@ -236,12 +239,15 @@ npm run lint
 
 ## 🔐 Security Best Practices
 
+> ⚠️ **CRITICAL**: Security-critical files require authorization before modification. See [SECURITY.md](./SECURITY.md) for complete list and policies.
+
 1. **Never commit `.env.local`** - Contains sensitive credentials
 2. **Use test mode** for development and testing
 3. **Stripe keys** - Secret keys are encrypted in the database, never in environment variables
 4. **MFA enforcement** - Implement MFA middleware before production deployment
 5. **Audit logging** - All billing actions should be logged (already structured in database migrations)
 6. **No PHI** - This platform handles NO protected health information
+7. **Protected Code** - Files marked with "SECURITY CRITICAL" require authorization from elitesquadp@protonmail.com
 
 ## 🆘 Troubleshooting
 

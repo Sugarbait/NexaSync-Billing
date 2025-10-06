@@ -504,7 +504,7 @@ export default function CustomersPage() {
                   {selectedCustomer.vonage_phone_numbers && selectedCustomer.vonage_phone_numbers.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {selectedCustomer.vonage_phone_numbers.map((phoneNum) => (
-                        <Badge key={phoneNum} color="purple">{phoneNum}</Badge>
+                        <Badge key={phoneNum} color="blue">{phoneNum}</Badge>
                       ))}
                     </div>
                   ) : (

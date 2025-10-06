@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/admin/billing/customers/page": "app/admin/billing/customers/page.js",
+  "/admin/billing/invoices/page": "app/admin/billing/invoices/page.js",
+  "/admin/billing/page": "app/admin/billing/page.js",
+  "/admin/billing/settings/page": "app/admin/billing/settings/page.js",
+  "/admin/billing/users/page": "app/admin/billing/users/page.js",
+  "/api/admin/create-user/route": "app/api/admin/create-user/route.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/login/page": "app/login/page.js"
+}

@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
 import type { BillingUser, LoginHistory } from '@/lib/types/auth'
+import { useNotification } from '@/components/ui/Notification'
 
 export default function ProfilePage() {
+  const { showNotification } = useNotification()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<BillingUser | null>(null)
@@ -82,11 +84,11 @@ export default function ProfilePage() {
 
       if (error) throw error
 
-      alert('Profile updated successfully')
+      showNotification('Profile updated successfully', 'success')
       loadProfile()
     } catch (error) {
       console.error('Failed to update profile:', error)
-      alert('Failed to update profile')
+      showNotification('Failed to update profile', 'error')
     } finally {
       setSaving(false)
     }
@@ -111,7 +113,7 @@ export default function ProfilePage() {
 
       if (error) throw error
 
-      alert('Password changed successfully')
+      showNotification('Password changed successfully', 'success')
       setFormData({
         ...formData,
         current_password: '',
@@ -120,7 +122,7 @@ export default function ProfilePage() {
       })
     } catch (error) {
       console.error('Failed to change password:', error)
-      alert('Failed to change password: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      showNotification('Failed to change password: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error')
     } finally {
       setSaving(false)
     }

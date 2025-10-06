@@ -17,6 +17,7 @@ export default function UsersPage() {
   const { showNotification, showConfirm } = useNotification()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<BillingUser[]>([])
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'pending'>('all')
   const [showModal, setShowModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -56,12 +57,28 @@ export default function UsersPage() {
   async function loadUsers() {
     setLoading(true)
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        console.error('Not authenticated')
+        setUsers([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('billing_users')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
       setUsers(data || [])
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -103,6 +120,9 @@ export default function UsersPage() {
 
         // Update password if provided
         if (formData.password) {
+          if (!editingUser.auth_user_id) {
+            throw new Error('User has no associated auth account')
+          }
           const result = await updateUserPassword(editingUser.auth_user_id, formData.password)
 
           if (!result.success) {
@@ -113,54 +133,43 @@ export default function UsersPage() {
           showNotification('User updated successfully', 'success')
         }
       } else {
-        // Create new user in Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              full_name: formData.full_name
-            }
-          }
+        // Create new user via server-side API route
+        const { data: sessionData } = await supabase.auth.getSession()
+
+        if (!sessionData.session) {
+          throw new Error('You must be logged in to create users')
+        }
+
+        const response = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            full_name: formData.full_name,
+            role: formData.role,
+            mfa_enabled: formData.mfa_enabled
+          })
         })
 
-        if (authError) throw authError
+        const result = await response.json()
 
-        // Create billing user record
-        if (authData.user) {
-          const { data: userData } = await supabase.auth.getUser()
-
-          const { error: userError } = await supabase
-            .from('billing_users')
-            .insert({
-              auth_user_id: authData.user.id,
-              email: formData.email,
-              full_name: formData.full_name,
-              role: formData.role,
-              mfa_enabled: false, // Will be set to true when MFA setup completes
-              is_active: true,
-              created_by: userData.user?.id
-            })
-
-          if (userError) throw userError
-
-          // If MFA is enabled, show MFA setup modal
-          if (formData.mfa_enabled && authData.user) {
-            const { data: createdUser } = await supabase
-              .from('billing_users')
-              .select('*')
-              .eq('auth_user_id', authData.user.id)
-              .single()
-
-            if (createdUser) {
-              closeModal()
-              await setupMfaForUser(createdUser)
-              return
-            }
-          }
-
-          showNotification('User created successfully. They will receive an email to confirm their account.', 'success')
+        if (!response.ok) {
+          console.error('API error:', result)
+          throw new Error(result.error || 'Failed to create user')
         }
+
+        // If MFA is enabled, show MFA setup modal
+        if (formData.mfa_enabled && result.user) {
+          closeModal()
+          await setupMfaForUser(result.user)
+          return
+        }
+
+        showNotification('User created successfully!', 'success')
       }
 
       closeModal()
@@ -201,6 +210,24 @@ export default function UsersPage() {
       } catch (error) {
         console.error('Failed to delete user:', error)
         showNotification('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error')
+      }
+    })
+  }
+
+  async function handleApproveUser(user: BillingUser) {
+    showConfirm(`Approve ${user.full_name} and allow them to log in?`, async () => {
+      try {
+        const { error } = await supabase
+          .from('billing_users')
+          .update({ is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', user.id)
+
+        if (error) throw error
+        showNotification(`${user.full_name} has been approved`, 'success')
+        loadUsers()
+      } catch (error) {
+        console.error('Failed to approve user:', error)
+        showNotification('Failed to approve user', 'error')
       }
     })
   }
@@ -280,6 +307,10 @@ export default function UsersPage() {
 
     try {
       // Use server action to update user password
+      if (!passwordChangeUser.auth_user_id) {
+        throw new Error('User has no associated auth account')
+      }
+
       const result = await updateUserPassword(
         passwordChangeUser.auth_user_id,
         passwordChangeData.newPassword
@@ -319,6 +350,7 @@ export default function UsersPage() {
       email: user.email,
       full_name: user.full_name,
       password: '',
+      confirmPassword: '',
       role: user.role,
       mfa_enabled: user.mfa_enabled
     })
@@ -479,6 +511,15 @@ export default function UsersPage() {
     )
   }
 
+  // Filter users based on status
+  const filteredUsers = users.filter(user => {
+    if (filterStatus === 'active') return user.is_active
+    if (filterStatus === 'pending') return !user.is_active
+    return true // 'all'
+  })
+
+  const pendingCount = users.filter(u => !u.is_active).length
+
   return (
     <div className="p-8">
       <div className="mb-8 flex items-center justify-between">
@@ -500,7 +541,32 @@ export default function UsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Users ({users.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Users ({filteredUsers.length})</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={filterStatus === 'all' ? 'primary' : 'secondary'}
+                onClick={() => setFilterStatus('all')}
+                size="sm"
+              >
+                All ({users.length})
+              </Button>
+              <Button
+                variant={filterStatus === 'active' ? 'primary' : 'secondary'}
+                onClick={() => setFilterStatus('active')}
+                size="sm"
+              >
+                Active ({users.filter(u => u.is_active).length})
+              </Button>
+              <Button
+                variant={filterStatus === 'pending' ? 'primary' : 'secondary'}
+                onClick={() => setFilterStatus('pending')}
+                size="sm"
+              >
+                Pending ({pendingCount})
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -517,7 +583,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr
                     key={user.id}
                     className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
@@ -557,6 +623,18 @@ export default function UsersPage() {
                     </td>
                     <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
+                        {!user.is_active && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleApproveUser(user)
+                            }}
+                            className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 rounded"
+                            title="Approve user"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
