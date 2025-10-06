@@ -133,39 +133,45 @@ export default function UsersPage() {
           showNotification('User updated successfully', 'success')
         }
       } else {
-        // Create new user via server-side API route
-        const { data: sessionData } = await supabase.auth.getSession()
-
-        if (!sessionData.session) {
-          throw new Error('You must be logged in to create users')
-        }
-
-        const response = await fetch('/api/admin/create-user', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`
-          },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            full_name: formData.full_name,
-            role: formData.role,
-            mfa_enabled: formData.mfa_enabled
-          })
+        // Create user directly with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.full_name
+            },
+            emailRedirectTo: `${window.location.origin}/login`
+          }
         })
 
-        const result = await response.json()
+        if (authError) throw authError
+        if (!authData.user) throw new Error('Failed to create auth user')
 
-        if (!response.ok) {
-          console.error('API error:', result)
-          throw new Error(result.error || 'Failed to create user')
-        }
+        // Get current user for created_by field
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+        // Create billing user record
+        const { data: newUser, error: userError } = await supabase
+          .from('billing_users')
+          .insert({
+            auth_user_id: authData.user.id,
+            email: formData.email,
+            full_name: formData.full_name,
+            role: formData.role,
+            is_active: true,
+            mfa_enabled: formData.mfa_enabled,
+            created_by: currentUser?.id || null
+          })
+          .select()
+          .single()
+
+        if (userError) throw userError
 
         // If MFA is enabled, show MFA setup modal
-        if (formData.mfa_enabled && result.user) {
+        if (formData.mfa_enabled && newUser) {
           closeModal()
-          await setupMfaForUser(result.user)
+          await setupMfaForUser(newUser)
           return
         }
 
@@ -469,21 +475,28 @@ export default function UsersPage() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) throw new Error('Not authenticated')
 
-      const response = await fetch('/api/invite-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Generate invite token
+      const inviteToken = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 7) // 7 days expiry
+
+      // Create invite record
+      const { error: inviteError } = await supabase
+        .from('user_invites')
+        .insert({
           email: inviteData.email,
           role: inviteData.role,
-          invitedBy: userData.user.id
+          invited_by: userData.user.id,
+          invite_token: inviteToken,
+          expires_at: expiresAt.toISOString(),
+          status: 'pending'
         })
-      })
 
-      const result = await response.json()
+      if (inviteError) throw inviteError
 
-      if (!result.success) throw new Error(result.error)
-
-      setInviteUrl(result.inviteUrl)
+      // Generate invite URL
+      const inviteUrl = `${window.location.origin}/signup?token=${inviteToken}`
+      setInviteUrl(inviteUrl)
       showNotification('Invite created successfully! Share the link below.', 'success')
     } catch (error) {
       console.error('Failed to send invite:', error)

@@ -197,27 +197,34 @@ export default function LoginPage() {
         throw new Error('Full name is required')
       }
 
-      // Create user via server-side API
-      const response = await fetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: registerData.email,
-          password: registerData.password,
-          full_name: registerData.fullName,
-          role: 'admin',
-          mfa_enabled: false,
-          is_active: false // Requires admin approval
-        })
+      // Create user directly with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: registerData.email,
+        password: registerData.password,
+        options: {
+          data: {
+            full_name: registerData.fullName
+          },
+          emailRedirectTo: `${window.location.origin}/login`
+        }
       })
 
-      const result = await response.json()
+      if (authError) throw authError
+      if (!authData.user) throw new Error('Failed to create auth user')
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Registration failed')
-      }
+      // Create billing user record (pending approval)
+      const { error: userError } = await supabase
+        .from('billing_users')
+        .insert({
+          auth_user_id: authData.user.id,
+          email: registerData.email,
+          full_name: registerData.fullName,
+          role: 'admin',
+          is_active: false, // Requires admin approval
+          mfa_enabled: false
+        })
+
+      if (userError) throw userError
 
       // Show success message and redirect to login
       setError('')
